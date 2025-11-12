@@ -116,7 +116,7 @@ class _StatsPageState extends State<StatsPage> {
           child: Row(
             children: [
               _BottomItem(
-                icon: Image.asset('assets/home.png', width: 24, height: 24,
+                icon: Image.asset('assets/Home.png', width: 24, height: 24,
                   color: _bottomIndex == 0 ? kPrimary500 : Colors.grey),
                 label: 'Home',
                 selected: _bottomIndex == 0,
@@ -138,7 +138,7 @@ class _StatsPageState extends State<StatsPage> {
                 onTap: () {},
               ),
               _BottomItem(
-                icon: Image.asset('assets/profile.png', width: 24, height: 24,
+                icon: Image.asset('assets/Profile.png', width: 24, height: 24,
                   color: _bottomIndex == 3 ? kPrimary500 : Colors.grey),
                 label: 'Profile',
                 selected: _bottomIndex == 3,

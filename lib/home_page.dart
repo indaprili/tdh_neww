@@ -225,7 +225,7 @@ class _HomePageState extends State<HomePage> {
             children: [
               _BottomItem(
                 icon: Image.asset(
-                  'assets/homepage.png', // Ganti path jika perlu
+                  'assets/Homepage.png', // Ganti path jika perlu
                   width: 24,
                   height: 24,
                 ),
@@ -247,7 +247,7 @@ class _HomePageState extends State<HomePage> {
               const Spacer(),
               _BottomItem(
                 icon: Image.asset(
-                  'assets/stats.png', // Ganti path jika perlu
+                  'assets/Stats.png', // Ganti path jika perlu
                   width: 24,
                   height: 24,
                 ),
@@ -467,10 +467,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 }
-
-/* ================== UI PARTS (Sama seperti sebelumnya) ================== */
-// Widget-widget di bawah ini tidak perlu diubah karena sudah menggunakan
-// ColorScheme (cs) atau logic isLight dari StatsPage.
 
 /// _SegmentedTabs
 class _SegmentedTabs extends StatelessWidget {

@@ -164,7 +164,7 @@ class _CalendarPageState extends State<CalendarPage> {
           child: Row(
             children: [
               _BottomItem(
-                icon: Image.asset('assets/home.png', width: 24, height: 24),
+                icon: Image.asset('assets/Home.png', width: 24, height: 24),
                 label: 'Home',
                 selected: _bottomIndex == 0,
                 onTap: () => Navigator.pushReplacementNamed(context, HomePage.routeName),
@@ -177,13 +177,13 @@ class _CalendarPageState extends State<CalendarPage> {
               ),
               const Spacer(),
               _BottomItem(
-                icon: Image.asset('assets/stats.png', width: 24, height: 24),
+                icon: Image.asset('assets/Stats.png', width: 24, height: 24),
                 label: 'Stats',
                 selected: _bottomIndex == 2,
                 onTap: () => Navigator.pushReplacementNamed(context, StatsPage.routeName),
               ),
               _BottomItem(
-                icon: Image.asset('assets/profile.png', width: 24, height: 24),
+                icon: Image.asset('assets/Profile.png', width: 24, height: 24),
                 label: 'Profile',
                 selected: _bottomIndex == 3,
                 onTap: () => Navigator.pushReplacementNamed(context, ProfilePage.routeName),

@@ -105,7 +105,7 @@ class _ProfilePageState extends State<ProfilePage> {
             children: [
               _BottomItem(
                 icon: Image.asset(
-                  'assets/home.png', // Pastikan path benar
+                  'assets/Home.png', // Pastikan path benar
                   width: 24,
                   height: 24,
                   color: _bottomIndex == 0 ? kPrimary500 : Colors.grey,
@@ -128,7 +128,7 @@ class _ProfilePageState extends State<ProfilePage> {
               const Spacer(),
               _BottomItem(
                 icon: Image.asset(
-                  'assets/stats.png', // Pastikan path benar
+                  'assets/Stats.png', // Pastikan path benar
                   width: 24,
                   height: 24,
                    color: _bottomIndex == 2 ? kPrimary500 : Colors.grey,
@@ -277,7 +277,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
                         // Notifications
                         _ArrowRow(
-                           imagePath: 'assets/notification.png',
+                           imagePath: 'assets/Notification.png',
                           iconBg: const Color(0xFFFFE5E5),
                           title: 'Notifications',
                            titleStyle: GoogleFonts.inter(fontWeight: FontWeight.w400, fontSize: 14),
