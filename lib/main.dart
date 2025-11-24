@@ -8,13 +8,22 @@ import 'calender_page.dart';
 import 'stats_page.dart';
 import 'profile_page.dart';
 import 'app_theme.dart';
+import 'notification_service.dart';
 
-void main() {
-  final controller = AppThemeController(); // <- controller global
-  runApp(AppTheme(                         // <- bungkus seluruh app
-    controller: controller,
-    child: TodoHabitApp(controller: controller),
-  ));
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  final notif = NotificationService();
+  await notif.ensureInitialized();
+  await notif.requestPermission();
+
+  final controller = AppThemeController();
+  runApp(
+    AppTheme(
+      controller: controller,
+      child: TodoHabitApp(controller: controller),
+    ),
+  );
 }
 
 class TodoHabitApp extends StatelessWidget {
@@ -33,8 +42,7 @@ class TodoHabitApp extends StatelessWidget {
             colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF2F80ED)),
             useMaterial3: true,
             inputDecorationTheme: const InputDecorationTheme(
-              border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
-            ),
+              border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)))),
           ),
           darkTheme: ThemeData(
             colorScheme: ColorScheme.fromSeed(
@@ -43,8 +51,7 @@ class TodoHabitApp extends StatelessWidget {
             ),
             useMaterial3: true,
             inputDecorationTheme: const InputDecorationTheme(
-              border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
-            ),
+              border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12)))),
           ),
           themeMode: controller.mode, // <- sinkron sama switch Dark Mode
           initialRoute: SplashScreen.routeName,

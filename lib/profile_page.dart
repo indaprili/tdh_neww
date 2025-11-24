@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart'; // <-- Import Google Fonts
 import 'calender_page.dart';
 import 'home_page.dart';
+import 'notification_service.dart';
 import 'stats_page.dart';
 import 'app_theme.dart'; // Pastikan file ini ada dan benar
-import 'add_edit_item_sheet.dart'; // <-- Pastikan import ini ada
+import 'add_edit_item_sheet.dart';
+import 'todo_item.dart'; // <-- Pastikan import ini ada
 
 const kPrimary500 = Color(0xFF1778FB);
 const kGreen200 = Color(0xFF8EE7C4);
@@ -60,11 +62,13 @@ class _ProfilePageState extends State<ProfilePage> {
             shape: const CircleBorder(),
             backgroundColor: kPrimary500,
             // --- onPressed DIPERBAIKI ---
-            onPressed: () async { // <-- Tambah async
+            onPressed: () async {
+              // <-- Tambah async
               final res = await AddEditItemSheet.show(
                 context,
                 isHabit: false, // Default Task di Profile Page
-                initial: ItemData( // Default data untuk item baru
+                initial: ItemData(
+                  // Default data untuk item baru
                   title: '',
                   description: '',
                   tag: 'Work',
@@ -78,9 +82,18 @@ class _ProfilePageState extends State<ProfilePage> {
               // Logika setelah sheet ditutup (opsional)
               if (res == null) return;
               if (res.action == AddEditAction.save && res.data != null) {
-                if(mounted) {
+                final newItem = res.data as TodoItem;
+                setState(() {});
+                // Schedule reminder
+                await NotificationService().scheduleReminder(newItem);
+
+                if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('${res.data!.isHabit ? "Habit" : "Task"} "${res.data!.title}" saved!')),
+                    SnackBar(
+                      content: Text(
+                        '${newItem.isHabit ? "Habit" : "Task"} "${newItem.title}" saved!',
+                      ),
+                    ),
                   );
                 }
               }
@@ -88,8 +101,8 @@ class _ProfilePageState extends State<ProfilePage> {
             // --- Akhir onPressed ---
             child: Icon(
               Icons.add,
-               color: isLight ? Colors.white : Colors.black,
-               ),
+              color: isLight ? Colors.white : Colors.black,
+            ),
           ),
         ],
       ),
@@ -112,18 +125,22 @@ class _ProfilePageState extends State<ProfilePage> {
                 ),
                 label: 'Home',
                 selected: _bottomIndex == 0,
-                onTap: () => Navigator.pushReplacementNamed(context, HomePage.routeName),
+                onTap: () =>
+                    Navigator.pushReplacementNamed(context, HomePage.routeName),
               ),
               _BottomItem(
                 icon: Image.asset(
                   'assets/calendar.png', // Pastikan path benar
                   width: 24,
                   height: 24,
-                   color: _bottomIndex == 1 ? kPrimary500 : Colors.grey,
+                  color: _bottomIndex == 1 ? kPrimary500 : Colors.grey,
                 ),
                 label: 'Calendar',
                 selected: _bottomIndex == 1,
-                onTap: () => Navigator.pushReplacementNamed(context, CalendarPage.routeName),
+                onTap: () => Navigator.pushReplacementNamed(
+                  context,
+                  CalendarPage.routeName,
+                ),
               ),
               const Spacer(),
               _BottomItem(
@@ -131,18 +148,21 @@ class _ProfilePageState extends State<ProfilePage> {
                   'assets/Stats.png', // Pastikan path benar
                   width: 24,
                   height: 24,
-                   color: _bottomIndex == 2 ? kPrimary500 : Colors.grey,
+                  color: _bottomIndex == 2 ? kPrimary500 : Colors.grey,
                 ),
                 label: 'Stats',
                 selected: _bottomIndex == 2,
-                onTap: () => Navigator.pushReplacementNamed(context, StatsPage.routeName),
+                onTap: () => Navigator.pushReplacementNamed(
+                  context,
+                  StatsPage.routeName,
+                ),
               ),
               _BottomItem(
                 icon: Image.asset(
                   'assets/profilepage.png', // Pastikan path benar
                   width: 24,
                   height: 24,
-                   color: _bottomIndex == 3 ? kPrimary500 : Colors.grey,
+                  color: _bottomIndex == 3 ? kPrimary500 : Colors.grey,
                 ),
                 label: 'Profile',
                 selected: _bottomIndex == 3,
@@ -193,11 +213,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     backgroundColor: !isLight
                         ? Colors.white.withOpacity(0.18)
                         : Colors.black.withOpacity(0.18),
-                    child: Icon(
-                      Icons.person,
-                      color: Colors.white,
-                      size: 36,
-                    ),
+                    child: Icon(Icons.person, color: Colors.white, size: 36),
                   ),
                   const SizedBox(height: 10),
                   Row(
@@ -265,34 +281,54 @@ class _ProfilePageState extends State<ProfilePage> {
                       children: [
                         // Dark Mode (Toggle Kustom)
                         _CustomToggleRow(
-                          imagePath: isLight ? 'assets/lightmode.png' : 'assets/darkmode.png',
+                          imagePath: isLight
+                              ? 'assets/lightmode.png'
+                              : 'assets/darkmode.png',
                           iconBg: const Color(0xFFFFF3C9),
                           title: 'Light Mode',
-                           titleStyle: GoogleFonts.inter(fontWeight: FontWeight.w400, fontSize: 14),
+                          titleStyle: GoogleFonts.inter(
+                            fontWeight: FontWeight.w400,
+                            fontSize: 14,
+                          ),
                           value: !isLight,
-                           activeImage: 'assets/toggledark.png',
-                           inactiveImage: 'assets/togglelight.png',
+                          activeImage: 'assets/toggledark.png',
+                          inactiveImage: 'assets/togglelight.png',
                           onChanged: (v) => themeCtrl.setDark(v),
                         ),
 
                         // Notifications
                         _ArrowRow(
-                           imagePath: 'assets/Notification.png',
+                          imagePath: 'assets/Notification.png',
                           iconBg: const Color(0xFFFFE5E5),
                           title: 'Notifications',
-                           titleStyle: GoogleFonts.inter(fontWeight: FontWeight.w400, fontSize: 14),
-                          onTap: () => _toast('Open notifications settings'),
+                          titleStyle: GoogleFonts.inter(
+                            fontWeight: FontWeight.w400,
+                            fontSize: 14,
+                          ),
+                          onTap: () async {
+                            await NotificationService()
+                                .scheduleDebugNotification();
+                            if (mounted) {
+                              _toast('Test notification scheduled (5s)');
+                            }
+                          },
                         ),
 
                         // Language
                         _ArrowRow(
-                           imagePath: 'assets/language.png',
+                          imagePath: 'assets/language.png',
                           iconBg: const Color(0xFFE7F0FF),
                           title: 'Language',
-                           titleStyle: GoogleFonts.inter(fontWeight: FontWeight.w400, fontSize: 14),
+                          titleStyle: GoogleFonts.inter(
+                            fontWeight: FontWeight.w400,
+                            fontSize: 14,
+                          ),
                           trailingText: _language,
                           onTap: () async {
-                            final lang = await _pickLanguage(context, _language);
+                            final lang = await _pickLanguage(
+                              context,
+                              _language,
+                            );
                             if (!mounted) return;
                             if (lang != null) setState(() => _language = lang);
                           },
@@ -300,10 +336,13 @@ class _ProfilePageState extends State<ProfilePage> {
 
                         // Calendar Sync (Switch Bawaan, ikon aset)
                         _SwitchRow(
-                           imagePath: 'assets/Synchronize.png',
+                          imagePath: 'assets/Synchronize.png',
                           iconBg: const Color(0xFFEAF7EF),
                           title: 'Calendar Sync',
-                           titleStyle: GoogleFonts.inter(fontWeight: FontWeight.w400, fontSize: 14),
+                          titleStyle: GoogleFonts.inter(
+                            fontWeight: FontWeight.w400,
+                            fontSize: 14,
+                          ),
                           value: _calendarSync,
                           onChanged: (v) => setState(() => _calendarSync = v),
                         ),
@@ -369,7 +408,6 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 } // <-- AKHIR DARI CLASS _ProfilePageState
 
-
 /* ================== Widgets kecil (Dimodifikasi) ================== */
 
 class _BottomItem extends StatelessWidget {
@@ -397,8 +435,14 @@ class _BottomItem extends StatelessWidget {
           children: [
             SizedBox(width: 24, height: 24, child: icon),
             const SizedBox(height: 4),
-            Text(label, style: GoogleFonts.inter(
-                color: color, fontSize: 12, fontWeight: FontWeight.w500)),
+            Text(
+              label,
+              style: GoogleFonts.inter(
+                color: color,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ],
         ),
       ),
@@ -414,7 +458,9 @@ class _SettingsCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isLight = Theme.of(context).brightness == Brightness.light;
-    final dividerColor = isLight ? cs.outlineVariant.withOpacity(0.4) : Colors.white;
+    final dividerColor = isLight
+        ? cs.outlineVariant.withOpacity(0.4)
+        : Colors.white;
 
     return Container(
       decoration: BoxDecoration(
@@ -440,12 +486,7 @@ class _SettingsCard extends StatelessWidget {
             decoration: BoxDecoration(
               border: isLast
                   ? null
-                  : Border(
-                      bottom: BorderSide(
-                        color: dividerColor,
-                        width: 1.0,
-                      ),
-                    ),
+                  : Border(bottom: BorderSide(color: dividerColor, width: 1.0)),
             ),
             child: child,
           );
@@ -473,11 +514,7 @@ class _ImageAssetBadge extends StatelessWidget {
         color: bgAdj,
         borderRadius: BorderRadius.circular(8),
       ),
-      child: Image.asset(
-        imagePath,
-        width: 18,
-        height: 18,
-      ),
+      child: Image.asset(imagePath, width: 18, height: 18),
     );
   }
 }
@@ -489,6 +526,7 @@ class _ArrowRow extends StatelessWidget {
   final TextStyle? titleStyle;
   final String? trailingText;
   final VoidCallback? onTap;
+
   const _ArrowRow({
     required this.imagePath,
     required this.iconBg,
@@ -506,14 +544,22 @@ class _ArrowRow extends StatelessWidget {
     return ListTile(
       leading: _ImageAssetBadge(imagePath: imagePath, bg: iconBg),
       title: Text(
-          title,
-          style: titleStyle ?? const TextStyle(fontWeight: FontWeight.w600)),
+        title, // ← pakai title yang dikirim dari luar
+        style: titleStyle ?? const TextStyle(fontWeight: FontWeight.w600),
+      ),
+      // nggak ada subtitle lagi, biar bisa dipakai umum (Notifications, Language, dll.)
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (trailingText != null)
-            Text(trailingText!, style: GoogleFonts.inter(
-                color: trailingColor, fontSize: 14, fontWeight: FontWeight.w400)),
+            Text(
+              trailingText!,
+              style: GoogleFonts.inter(
+                color: trailingColor,
+                fontSize: 14,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
           const SizedBox(width: 6),
           Icon(Icons.chevron_right_rounded, color: trailingColor),
         ],
@@ -547,8 +593,9 @@ class _SwitchRow extends StatelessWidget {
     return ListTile(
       leading: _ImageAssetBadge(imagePath: imagePath, bg: iconBg),
       title: Text(
-          title,
-          style: titleStyle ?? const TextStyle(fontWeight: FontWeight.w600)),
+        title,
+        style: titleStyle ?? const TextStyle(fontWeight: FontWeight.w600),
+      ),
       trailing: Switch.adaptive(
         value: value,
         onChanged: onChanged,
@@ -586,8 +633,9 @@ class _CustomToggleRow extends StatelessWidget {
     return ListTile(
       leading: _ImageAssetBadge(imagePath: imagePath, bg: iconBg),
       title: Text(
-          title,
-          style: titleStyle ?? const TextStyle(fontWeight: FontWeight.w600)),
+        title,
+        style: titleStyle ?? const TextStyle(fontWeight: FontWeight.w600),
+      ),
       trailing: GestureDetector(
         onTap: () => onChanged(!value),
         child: Image.asset(

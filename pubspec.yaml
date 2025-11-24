@@ -34,6 +34,10 @@ dependencies:
   google_fonts: ^6.3.2
   table_calendar: ^3.2.0
   intl: 0.20.2
+  sqflite: ^2.4.2
+  path: ^1.9.1
+  flutter_local_notifications: ^19.5.0
+  timezone: ^0.10.1
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
@@ -74,19 +78,16 @@ flutter:
     - assets/Home.png
     - assets/calendar.png
     - assets/Stats.png
-    - assets/profile.png
-    - assets/HomePage.png
     - assets/statspage.png
+    - assets/profile.png
     - assets/profilepage.png
+    - assets/Homepage.png
     - assets/time_task.png
     - assets/repeat_task.png
     - assets/reminder_task.png
     - assets/calender_icon_habit.png
-    - assets/time_task.png
     - assets/time_habit.png
-    - assets/repeat_task.png
     - assets/repeat_habit.png
-    - assets/reminder_task.png
     - assets/reminder_habit.png
     - assets/dropdown_task.png
     - assets/dropdown_habit.png
@@ -96,8 +97,9 @@ flutter:
     - assets/toggledark.png
     - assets/togglelight.png
     - assets/Synchronize.png
-    - assets/Language.png
+    - assets/language.png
     - assets/Notification.png
+
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in

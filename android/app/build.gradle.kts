@@ -14,6 +14,9 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
+
+        // 🚨 TAMBAHKAN BARIS INI (Penting untuk Desugaring)
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
@@ -29,6 +32,9 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // 💡 Tambahkan ini juga di defaultConfig jika ada masalah multidex
+        multiDexEnabled = true
     }
 
     buildTypes {
@@ -42,4 +48,9 @@ android {
 
 flutter {
     source = "../.."
+}
+
+dependencies {
+    // Gunakan fungsi 'coreLibraryDesugaring' dengan string dan tanda kurung
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 }

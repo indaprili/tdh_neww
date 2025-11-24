@@ -1,23 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-// Import file-file halaman lainnya
+// Halaman lain
 import 'calender_page.dart';
+import 'notification_service.dart';
 import 'stats_page.dart';
 import 'add_edit_item_sheet.dart';
 import 'profile_page.dart';
 
-// --- KONSTANTA ---
+// model & database
+import 'todo_item.dart';
+import 'todo_database.dart';
+
+// alias supaya kode lama tetap pakai _Item
+typedef _Item = TodoItem;
+
+// KONSTANTA
 const kPrimary500 = Color(0xFF1778FB); // blue
-const kGreen200 = Color(0xFF8EE7C4); // green
+const kGreen200  = Color(0xFF8EE7C4);  // green
 const kTaskGreen = Color(0xFF27AE60);
 
-// --- KONSTANTA BARU UNTUK DARK MODE ---
-const double kDarkMixPercent = 0.3; // 30% campuran hitam
+const double kDarkMixPercent = 0.3;
 
 class HomePage extends StatefulWidget {
   static const routeName = '/home';
   const HomePage({super.key});
+
   @override
   State<HomePage> createState() => _HomePageState();
 }
@@ -25,82 +33,15 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   int _bottomIndex = 0;
   int _tabIndex = 0; // 0 = Task, 1 = Habit
+
   final DateTime _today = DateTime.now();
   int _selectedOffset = 0;
 
-  // --- DATA DUMMY (Sama seperti sebelumnya) ---
-  List<_Item> tasks = [
-    _Item(
-      'Finish project report',
-      'Work',
-      DateTime.now(),
-      false,
-      chipColor: const Color(0xFF8E44AD),
-    ),
-    _Item(
-      'Buy groceries',
-      'Personal',
-      DateTime.now(),
-      false,
-      chipColor: const Color(0xFFF39C12),
-    ),
-    _Item(
-      'Call the dentist',
-      'Health',
-      DateTime.now().add(const Duration(hours: 6)),
-      false,
-      chipColor: const Color(0xFF16A085),
-    ),
-    _Item(
-      'Team meeting',
-      'Work',
-      DateTime.now().add(const Duration(hours: 2)),
-      false,
-      chipColor: const Color(0xFF8E44AD),
-    ),
-  ];
+  List<_Item> tasks = [];
+  List<_Item> habits = [];
 
-  List<_Item> habits = [
-    _Item(
-      'Drink 8 glasses of water',
-      'Daily',
-      DateTime.now(),
-      false,
-      chipColor: const Color(0xFF2980B9),
-    ),
-    _Item(
-      'Read for 20 minutes',
-      'Daily',
-      DateTime.now(),
-      true,
-      chipColor: const Color(0xFF3F51B5),
-    ),
-    _Item(
-      'Exercise',
-      '30 min',
-      DateTime.now(),
-      false,
-      chipColor: const Color(0xFF27AE60),
-    ),
-    _Item(
-      'Meditate',
-      'Daily',
-      DateTime.now(),
-      true,
-      chipColor: const Color(0xFF673AB7),
-    ),
-    _Item(
-      'Sleep before 11 PM',
-      'Weekly',
-      DateTime.now(),
-      false,
-      chipColor: const Color(0xFFE91E63),
-    ),
-  ];
-  // --- AKHIR DATA DUMMY ---
-
-  // --- GETTERS & HELPERS (Sama seperti sebelumnya) ---
   DateTime get _selectedDate => _today.add(Duration(days: _selectedOffset));
+
   bool _isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
@@ -124,8 +65,8 @@ class _HomePageState extends State<HomePage> {
 
   String _todayFormatted(DateTime d) {
     const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December',
+      'January','February','March','April','May','June',
+      'July','August','September','October','November','December',
     ];
     final dd = d.day.toString().padLeft(2, '0');
     return 'Today, $dd ${months[d.month - 1]} ${d.year}';
@@ -141,25 +82,61 @@ class _HomePageState extends State<HomePage> {
     final mm = date.month.toString().padLeft(2, '0');
     return '$dd/$mm';
   }
-  // --- AKHIR GETTERS & HELPERS ---
+
+  @override
+  void initState() {
+    super.initState();
+    NotificationService().requestPermission();
+    //NotificationService().scheduleDebugNotification();
+    _loadItemsFromDb();
+  }
+
+  Future<void> _loadItemsFromDb() async {
+    try {
+      final all = await TodoDatabase.instance.getAllItems();
+      setState(() {
+        tasks  = all.where((e) => !e.isHabit).toList();
+        habits = all.where((e) =>  e.isHabit).toList();
+      });
+    } catch (e) {
+      debugPrint('Error load items: $e');
+    }
+  }
+
+  Future<void> _toggleDone(List<_Item> source, int index) async {
+    final item = source[index];
+    setState(() {
+      item.done = !item.done;
+    });
+    try {
+      if (item.id != null) {
+        await TodoDatabase.instance.updateItem(item);
+        // (opsional) di sini bisa cancel notif kalau mau, tapi sekarang fokusnya hanya schedule
+      }
+    } catch (e) {
+      debugPrint('Error update done: $e');
+    }
+  }
+
+  // Wrapper supaya kalau nanti logika reminder berubah, cukup di sini
+  
+  Future<void> _scheduleReminder(_Item item) async {
+    await NotificationService().scheduleReminder(item);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-
-    // --- PERUBAHAN 1: Tambahkan variabel isLight ---
+    final theme   = Theme.of(context);
+    final cs      = theme.colorScheme;
     final isLight = theme.brightness == Brightness.light;
 
-    final panelColor = cs.surface;
-    final shadowColor = Colors.black.withOpacity(
-      isLight ? 0.08 : 0.35, // Shadow FAB bisa tetap ada
-    );
+    final panelColor  = cs.surface;
+    final shadowColor = Colors.black.withOpacity(isLight ? 0.08 : 0.35);
 
     return Scaffold(
       extendBody: true,
 
-      // --- FAB & Navigasi (Sama seperti sebelumnya) ---
+      // FAB
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       floatingActionButton: Stack(
         alignment: Alignment.center,
@@ -190,20 +167,60 @@ class _HomePageState extends State<HomePage> {
               if (res == null) return;
               if (res.action == AddEditAction.save && res.data != null) {
                 final d = res.data!;
-                final due = d.dueDate ?? _selectedDate;
-                final newItem = _Item(
-                  d.title,
-                  d.tag,
-                  due,
-                  d.done,
+
+                // tanggal dasar = dari sheet, kalau null pakai tanggal yang sedang dipilih
+                DateTime baseDate = d.dueDate ?? _selectedDate;
+
+                // kalau ada time, gabungkan ke dalam DateTime
+                if (d.dueTime != null) {
+                  baseDate = DateTime(
+                    baseDate.year,
+                    baseDate.month,
+                    baseDate.day,
+                    d.dueTime!.hour,
+                    d.dueTime!.minute,
+                  );
+                }
+
+                var newItem = _Item(
+                  title: d.title,
+                  chip: d.tag,
+                  dueDate: baseDate,
+                  done: d.done,
                   chipColor: d.chipColor,
+                  isHabit: _tabIndex == 1,
                 );
+
+                // 1) langsung masukin ke list biar kelihatan real-time
                 setState(() {
-                  if (_tabIndex == 0)
-                    tasks.add(newItem);
-                  else
+                  if (newItem.isHabit) {
                     habits.add(newItem);
+                  } else {
+                    tasks.add(newItem);
+                  }
                 });
+
+                // 2) baru coba simpan ke database + schedule reminder
+                try {
+                  final id = await TodoDatabase.instance.insertItem(newItem);
+                  try {
+                    newItem.id = id;
+                  } catch (_) {
+                    // kalau id final / read-only, abaikan saja
+                  }
+
+                  // Jadwalkan notifikasi setelah item punya ID
+                  await _scheduleReminder(newItem);
+                } catch (e) {
+                  debugPrint('Error insert item: $e');
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Failed to save to database'),
+                      ),
+                    );
+                  }
+                }
               }
             },
             child: Icon(
@@ -214,7 +231,7 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
 
-      // --- Bottom Bar (Sama seperti sebelumnya) ---
+      // Bottom nav
       bottomNavigationBar: BottomAppBar(
         color: cs.surface,
         shape: const CircularNotchedRectangle(),
@@ -224,76 +241,68 @@ class _HomePageState extends State<HomePage> {
           child: Row(
             children: [
               _BottomItem(
-                icon: Image.asset(
-                  'assets/Homepage.png', // Ganti path jika perlu
-                  width: 24,
-                  height: 24,
-                ),
+                icon: Image.asset('assets/Homepage.png', width: 24, height: 24),
                 label: 'Home',
                 selected: _bottomIndex == 0,
-                onTap: () {}, // Sudah di halaman ini
+                onTap: () {}, // sudah di halaman ini
               ),
               _BottomItem(
-                icon: Image.asset(
-                  'assets/calendar.png', // Ganti path jika perlu
-                  width: 24,
-                  height: 24,
-                ),
+                icon: Image.asset('assets/calendar.png', width: 24, height: 24),
                 label: 'Calendar',
                 selected: _bottomIndex == 1,
-                onTap: () =>
-                    Navigator.pushReplacementNamed(context, CalendarPage.routeName),
+                onTap: () => Navigator.pushReplacementNamed(
+                  context,
+                  CalendarPage.routeName,
+                ),
               ),
               const Spacer(),
               _BottomItem(
-                icon: Image.asset(
-                  'assets/Stats.png', // Ganti path jika perlu
-                  width: 24,
-                  height: 24,
-                ),
+                icon: Image.asset('assets/Stats.png', width: 24, height: 24),
                 label: 'Stats',
                 selected: _bottomIndex == 2,
-                onTap: () => Navigator.pushReplacementNamed(context, StatsPage.routeName),
+                onTap: () => Navigator.pushReplacementNamed(
+                  context,
+                  StatsPage.routeName,
+                ),
               ),
               _BottomItem(
-                icon: Image.asset(
-                  'assets/profile.png', // Ganti path jika perlu
-                  width: 24,
-                  height: 24,
-                ),
+                icon: Image.asset('assets/profile.png', width: 24, height: 24),
                 label: 'Profile',
                 selected: _bottomIndex == 3,
-                onTap: () => Navigator.pushReplacementNamed(context, ProfilePage.routeName),
+                onTap: () => Navigator.pushReplacementNamed(
+                  context,
+                  ProfilePage.routeName,
+                ),
               ),
             ],
           ),
         ),
       ),
-      
-      // --- BODY ---
+
+      // BODY
       body: Stack(
         children: [
-          // --- PERUBAHAN 2: Header gradient dinamis ---
+          // Header gradient
           Container(
             height: 220,
             width: double.infinity,
-            decoration: BoxDecoration( // <-- Hapus 'const'
+            decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: isLight
                     ? [kGreen200, kPrimary500, kGreen200]
-                    : [ // Warna redup untuk dark mode
+                    : [
                         Color.lerp(kGreen200, Colors.black, kDarkMixPercent)!,
                         Color.lerp(kPrimary500, Colors.black, kDarkMixPercent)!,
                         Color.lerp(kGreen200, Colors.black, kDarkMixPercent)!,
                       ],
-                stops: const [0, 0.5, 1],
+                stops: const [0, .5, 1],
                 begin: Alignment.topLeft,
                 end: Alignment.topRight,
               ),
             ),
           ),
 
-          // Header content (Sama seperti sebelumnya)
+          // Header content
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
@@ -330,16 +339,13 @@ class _HomePageState extends State<HomePage> {
                       ],
                     ),
                   ),
-                  const Icon(
-                    Icons.notifications_none_rounded,
-                    color: Colors.white,
-                  ),
+                  const Icon(Icons.notifications_none_rounded, color: Colors.white),
                 ],
               ),
             ),
           ),
 
-          // --- PERUBAHAN 3: Panel isi dengan shadow dinamis ---
+          // Panel isi
           Positioned.fill(
             top: 150,
             child: Container(
@@ -349,10 +355,9 @@ class _HomePageState extends State<HomePage> {
                   top: Radius.circular(28),
                 ),
                 boxShadow: [
-                  // Tampilkan shadow hanya di light mode
                   if (isLight)
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.08), // Shadow tipis
+                      color: Colors.black.withOpacity(0.08),
                       blurRadius: 18,
                       offset: const Offset(0, -4),
                     ),
@@ -361,13 +366,11 @@ class _HomePageState extends State<HomePage> {
               child: ListView(
                 padding: const EdgeInsets.only(bottom: 110),
                 children: [
-                  // Segmented Tabs
                   _SegmentedTabs(
                     index: _tabIndex,
                     onChanged: (v) => setState(() => _tabIndex = v),
                   ),
 
-                  // Tanggal
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
                     child: Center(
@@ -382,7 +385,6 @@ class _HomePageState extends State<HomePage> {
                   ),
                   const SizedBox(height: 10),
 
-                  // Strip Tanggal
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: _DateStrip(
@@ -398,7 +400,6 @@ class _HomePageState extends State<HomePage> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Progress Card
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: _ProgressCard(
@@ -409,20 +410,19 @@ class _HomePageState extends State<HomePage> {
                   ),
                   const SizedBox(height: 12),
 
-                  // List Item (Sudah dark mode ready)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Column(
                       children: _currentList.asMap().entries.map((entry) {
-                        final item = entry.value;
-                        final source = _tabIndex == 0 ? tasks : habits;
+                        final item      = entry.value;
+                        final source    = _tabIndex == 0 ? tasks : habits;
                         final realIndex = source.indexOf(item);
+
                         return _ItemTile(
                           item: item,
                           timeText: _formatDue(item.dueDate),
                           isHabit: _tabIndex == 1,
-                          onToggle: () =>
-                              setState(() => item.done = !item.done),
+                          onToggle: () => _toggleDone(source, realIndex),
                           onTap: () async {
                             final res = await AddEditItemSheet.show(
                               context,
@@ -438,19 +438,51 @@ class _HomePageState extends State<HomePage> {
                               ),
                             );
                             if (res == null) return;
+
                             if (res.action == AddEditAction.delete) {
+                              try {
+                                if (item.id != null) {
+                                  await TodoDatabase.instance.deleteItem(item.id!);
+                                }
+                              } catch (e) {
+                                debugPrint('Error delete item: $e');
+                              }
                               setState(() => source.removeAt(realIndex));
                             } else if (res.action == AddEditAction.save &&
                                 res.data != null) {
                               final d = res.data!;
-                              setState(() {
-                                source[realIndex] = _Item(
-                                  d.title,
-                                  d.tag,
-                                  d.dueDate ?? item.dueDate,
-                                  d.done,
-                                  chipColor: d.chipColor,
+                              DateTime baseDate = d.dueDate ?? item.dueDate;
+                              if (d.dueTime != null) {
+                                baseDate = DateTime(
+                                  baseDate.year,
+                                  baseDate.month,
+                                  baseDate.day,
+                                  d.dueTime!.hour,
+                                  d.dueTime!.minute,
                                 );
+                              }
+
+                              final updated = _Item(
+                                title: d.title,
+                                chip: d.tag,
+                                dueDate: baseDate,
+                                done: d.done,
+                                chipColor: d.chipColor,
+                                isHabit: item.isHabit,
+                              )..id = item.id;
+
+                              try {
+                                if (updated.id != null) {
+                                  await TodoDatabase.instance.updateItem(updated);
+                                  // reschedule reminder setelah di-edit
+                                  await _scheduleReminder(updated);
+                                }
+                              } catch (e) {
+                                debugPrint('Error update item: $e');
+                              }
+
+                              setState(() {
+                                source[realIndex] = updated;
                               });
                             }
                           },
@@ -468,7 +500,8 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-/// _SegmentedTabs
+/* ====================== UI PARTS ====================== */
+
 class _SegmentedTabs extends StatelessWidget {
   final int index;
   final ValueChanged<int> onChanged;
@@ -539,7 +572,6 @@ class _SegmentedTabs extends StatelessWidget {
   }
 }
 
-/// _BottomItem
 class _BottomItem extends StatelessWidget {
   final Widget icon;
   final String label;
@@ -583,7 +615,6 @@ class _BottomItem extends StatelessWidget {
   }
 }
 
-/// _DateStrip
 class _DateStrip extends StatelessWidget {
   final DateTime today;
   final int selectedOffset;
@@ -613,12 +644,10 @@ class _DateStrip extends StatelessWidget {
         itemCount: 7,
         separatorBuilder: (_, __) => const SizedBox(width: 10),
         itemBuilder: (context, i) {
-          final date = today.add(Duration(days: i));
-          final isSelected = i == selectedOffset;
-          final weekday = [
-            'SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT',
-          ][date.weekday % 7];
-          final dd = date.day.toString().padLeft(2, '0');
+          final date      = today.add(Duration(days: i));
+          final isSelected= i == selectedOffset;
+          final weekday   = ['SUN','MON','TUE','WED','THU','FRI','SAT'][date.weekday % 7];
+          final dd        = date.day.toString().padLeft(2, '0');
 
           final bgColor = isSelected ? accentColor : theme.cardColor;
           final txtColor1 = isSelected
@@ -672,7 +701,6 @@ class _DateStrip extends StatelessWidget {
   }
 }
 
-/// _ProgressCard
 class _ProgressCard extends StatelessWidget {
   final bool isHabit;
   final double percent;
@@ -686,7 +714,7 @@ class _ProgressCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final title = isHabit ? "Today's Habit" : "Today's Task";
-    final sub = isHabit
+    final sub   = isHabit
         ? "Great progress! Almost there 💪"
         : "Focus on What Matters! 🔥";
     final colors = isHabit
@@ -717,21 +745,20 @@ class _ProgressCard extends StatelessWidget {
                   child: CircularProgressIndicator(
                     value: percent,
                     strokeWidth: 5,
-                    valueColor: const AlwaysStoppedAnimation<Color>(
-                      Colors.white,
-                    ),
+                    valueColor:
+                        const AlwaysStoppedAnimation<Color>(Colors.white),
                     backgroundColor: Colors.white24,
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.all(4.0), // Beri sedikit padding
+                  padding: const EdgeInsets.all(4.0),
                   child: FittedBox(
                     fit: BoxFit.scaleDown,
                     child: Text(
                       '${(percent * 100).round()}%',
                       style: GoogleFonts.inter(
                         color: Colors.white,
-                        fontSize: 24, // Ukuran font bisa tetap 24
+                        fontSize: 24,
                         fontWeight: FontWeight.w400,
                       ),
                     ),
@@ -780,23 +807,6 @@ class _ProgressCard extends StatelessWidget {
   }
 }
 
-/// _Item (Model)
-class _Item {
-  final String title;
-  final String chip;
-  DateTime dueDate;
-  bool done;
-  final Color chipColor;
-  _Item(
-    this.title,
-    this.chip,
-    this.dueDate,
-    this.done, {
-    required this.chipColor,
-  });
-}
-
-/// _ItemTile (Sudah Dark Mode Ready)
 class _ItemTile extends StatelessWidget {
   final _Item item;
   final String timeText;
@@ -814,16 +824,16 @@ class _ItemTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
+    final theme   = Theme.of(context);
+    final cs      = theme.colorScheme;
     final isLight = theme.brightness == Brightness.light;
 
-    final accent = isHabit ? kPrimary500 : kTaskGreen;
+    final accent       = isHabit ? kPrimary500 : kTaskGreen;
     final Color bgSoft = isLight
         ? accent.withOpacity(.10)
-        : cs.surfaceVariant.withOpacity(0.3);
-    final Color border = cs.outlineVariant.withOpacity(isLight ? 0.35 : 0.6);
-    final Color subtleColor = cs.onSurfaceVariant;
+        : cs.surfaceVariant.withOpacity(0.30);
+    final Color border = cs.outlineVariant.withOpacity(isLight ? 0.35 : 0.60);
+    final Color subtle = cs.onSurfaceVariant;
 
     return InkWell(
       onTap: onTap,
@@ -833,7 +843,7 @@ class _ItemTile extends StatelessWidget {
         decoration: BoxDecoration(
           color: bgSoft,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: border),
+          border: Border.all(color: border, width: 1),
         ),
         child: Row(
           children: [
@@ -855,6 +865,7 @@ class _ItemTile extends StatelessWidget {
                     style: GoogleFonts.inter(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
+                      color: cs.onSurface,
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -862,16 +873,12 @@ class _ItemTile extends StatelessWidget {
                     children: [
                       _Chip(text: item.chip, color: item.chipColor),
                       const SizedBox(width: 8),
-                      Icon(
-                        Icons.access_time_rounded,
-                        size: 14,
-                        color: subtleColor,
-                      ),
+                      Icon(Icons.access_time_rounded, size: 14, color: subtle),
                       const SizedBox(width: 4),
                       Text(
                         timeText,
                         style: GoogleFonts.inter(
-                          color: subtleColor,
+                          color: subtle,
                           fontSize: 12,
                         ),
                       ),
@@ -881,10 +888,7 @@ class _ItemTile extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 10),
-            Icon(
-              Icons.more_horiz_rounded,
-              color: subtleColor,
-            ),
+            Icon(Icons.more_horiz_rounded, color: subtle),
           ],
         ),
       ),
@@ -892,7 +896,6 @@ class _ItemTile extends StatelessWidget {
   }
 }
 
-/// _Chip (Sudah Dark Mode Ready)
 class _Chip extends StatelessWidget {
   final String text;
   final Color color;
@@ -900,10 +903,9 @@ class _Chip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool isLight = Theme.of(context).brightness == Brightness.light;
-    final Color chipBg =
-        isLight ? color.withOpacity(.18) : color.withOpacity(0.3);
-    final Color chipFg = isLight
+    final isLight = Theme.of(context).brightness == Brightness.light;
+    final chipBg  = isLight ? color.withOpacity(.18) : color.withOpacity(0.30);
+    final chipFg  = isLight
         ? color
         : HSLColor.fromColor(color).withLightness(0.7).toColor();
 
@@ -925,19 +927,19 @@ class _Chip extends StatelessWidget {
   }
 }
 
-/// _CheckCircle (Sudah Dark Mode Ready)
 class _CheckCircle extends StatelessWidget {
   final bool checked;
   final Color color;
   final Color? borderColor;
-
-  const _CheckCircle(
-      {required this.checked, required this.color, this.borderColor});
+  const _CheckCircle({
+    required this.checked,
+    required this.color,
+    this.borderColor,
+  });
 
   @override
   Widget build(BuildContext context) {
     final effectiveBorderColor = borderColor ?? color;
-
     return AnimatedContainer(
       duration: const Duration(milliseconds: 160),
       width: 32,
@@ -945,8 +947,7 @@ class _CheckCircle extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: checked ? color : Colors.transparent,
-        border:
-            checked ? null : Border.all(color: effectiveBorderColor, width: 2),
+        border: checked ? null : Border.all(color: effectiveBorderColor, width: 2),
       ),
       child: checked
           ? const Icon(Icons.check, color: Colors.white, size: 20)

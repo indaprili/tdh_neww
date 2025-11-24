@@ -1,13 +1,20 @@
-// stats_page.dart
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 
-import 'calender_page.dart'; // pastikan sesuai nama file kamu
+import 'calender_page.dart';
 import 'home_page.dart';
 import 'add_edit_item_sheet.dart';
+import 'notification_service.dart';
 import 'profile_page.dart';
+
+// import model & database yang sama dengan HomePage
+import 'todo_item.dart';
+import 'todo_database.dart';
+
+// Biar tetap bisa pakai nama _Item di UI
+typedef _Item = TodoItem;
 
 const kPrimary500   = Color(0xFF1778FB); // Habit (biru)
 const kGreen200     = Color(0xFF8EE7C4); // header gradient light
@@ -26,35 +33,66 @@ class _StatsPageState extends State<StatsPage> {
   int _tabIndex = 0;   // 0 = Task, 1 = Habit
   int _bottomIndex = 2;
 
-  // --- Data Dummy ---
-  final List<_Item> _tasks = [
-    _Item('Finish project report', 'Work',    'Today, 08:00', false, chipColor: const Color(0xFF8E44AD)),
-    _Item('Buy groceries',         'Personal','Today',        false, chipColor: const Color(0xFFF39C12)),
-    _Item('Call the dentist',      'Health',  'Today, 14:00', false, chipColor: const Color(0xFF16A085)),
-    _Item('Team meeting',          'Work',    'Today, 10:00', false, chipColor: const Color(0xFF8E44AD)),
-  ];
-  final List<_Item> _habits = [
-    _Item('Drink 8 glasses of water', 'Daily',  'Today', true,  chipColor: const Color(0xFF2980B9)),
-    _Item('Read for 20 minutes',      'Daily',  'Today', true,  chipColor: const Color(0xFF3F51B5)),
-    _Item('Exercise',                  '30 min', '—',    false, chipColor: const Color(0xFF27AE60)),
-    _Item('Meditate',                  'Daily',  '—',    true,  chipColor: const Color(0xFF673AB7)),
-    _Item('Sleep before 11 PM',        'Weekly', '—',    false, chipColor: const Color(0xFFE91E63)),
-  ];
-  // --- End Dummy ---
+  // Sekarang data diambil dari database, bukan dummy manual
+  List<_Item> _tasks = [];
+  List<_Item> _habits = [];
 
   List<_Item> get _currentList => _tabIndex == 0 ? _tasks : _habits;
-  void _toggle(_Item item) => setState(() => item.done = !item.done);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadItemsFromDb();
+  }
+
+  Future<void> _loadItemsFromDb() async {
+    final all = await TodoDatabase.instance.getAllItems();
+    setState(() {
+      _tasks  = all.where((e) => !e.isHabit).toList();
+      _habits = all.where((e) =>  e.isHabit).toList();
+    });
+  }
+
+  void _toggle(_Item item) async {
+    setState(() {
+      item.done = !item.done;
+    });
+    if (item.id != null) {
+      await TodoDatabase.instance.updateItem(item);
+    }
+  }
+
+  String _formatDue(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final itemDay = DateTime(date.year, date.month, date.day);
+    final timeStr = DateFormat('HH:mm').format(date);
+
+    if (itemDay == today) {
+      return 'Today, $timeStr';
+    }
+    return '${DateFormat('dd/MM').format(date)}, $timeStr';
+  }
+  Future<void> _scheduleReminder(_Item item) async {
+    if (item.dueDate != null) {
+      final reminderTime = item.dueDate!.subtract(Duration(minutes: 15));
+      await NotificationService().scheduleReminder(item);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final theme  = Theme.of(context);
-    final cs     = theme.colorScheme;
-    final isLight= theme.brightness == Brightness.light;
+    final theme   = Theme.of(context);
+    final cs      = theme.colorScheme;
+    final isLight = theme.brightness == Brightness.light;
+
+    final currentList    = _currentList;
+    final totalItems     = currentList.length;
+    final completedItems = currentList.where((e) => e.done).length;
 
     return Scaffold(
       extendBody: true,
 
-      // FAB + bulatan belakang (notch)
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       floatingActionButton: Stack(
         alignment: Alignment.center,
@@ -85,20 +123,30 @@ class _StatsPageState extends State<StatsPage> {
               if (res == null) return;
               if (res.action == AddEditAction.save && res.data != null) {
                 final d = res.data!;
-                final timeStr = (d.dueDate != null && d.dueTime != null)
-                    ? formatDateTime(d.dueDate!, d.dueTime!)
-                    : (d.dueDate != null
-                        ? DateFormat('dd/MM').format(d.dueDate!)
-                        : (_tabIndex == 0 ? 'Today' : '—'));
+                final due = d.dueDate ?? DateTime.now();
 
                 final newItem = _Item(
-                  d.title, d.tag, timeStr, d.done,
+                  title: d.title,
+                  chip: d.tag,
+                  dueDate: due,
+                  done: d.done,
                   chipColor: d.chipColor,
+                  isHabit: _tabIndex == 1,
                 );
+
+                final id = await TodoDatabase.instance.insertItem(newItem);
+                newItem.id = id;
+
                 setState(() {
-                  if (_tabIndex == 0) _tasks.add(newItem);
-                  else _habits.add(newItem);
+                  if (_tabIndex == 0) {
+                    _tasks.add(newItem);
+                  } else {
+                    _habits.add(newItem);
+                  }
                 });
+
+                //Panggil fungsi pengingat setelah berhasil menyimpan item ke database
+                await _scheduleReminder(newItem);
               }
             },
             child: Icon(Icons.add, color: isLight ? Colors.white : Colors.black),
@@ -106,7 +154,6 @@ class _StatsPageState extends State<StatsPage> {
         ],
       ),
 
-      // Bottom bar dengan notch
       bottomNavigationBar: BottomAppBar(
         color: cs.surface,
         shape: const CircularNotchedRectangle(),
@@ -116,43 +163,66 @@ class _StatsPageState extends State<StatsPage> {
           child: Row(
             children: [
               _BottomItem(
-                icon: Image.asset('assets/Home.png', width: 24, height: 24,
-                  color: _bottomIndex == 0 ? kPrimary500 : Colors.grey),
+                icon: Image.asset(
+                  'assets/Home.png',
+                  width: 24,
+                  height: 24,
+                  color: _bottomIndex == 0 ? kPrimary500 : Colors.grey,
+                ),
                 label: 'Home',
                 selected: _bottomIndex == 0,
-                onTap: () => Navigator.pushReplacementNamed(context, HomePage.routeName),
+                onTap: () => Navigator.pushReplacementNamed(
+                  context,
+                  HomePage.routeName,
+                ),
               ),
               _BottomItem(
-                icon: Image.asset('assets/calendar.png', width: 24, height: 24,
-                  color: _bottomIndex == 1 ? kPrimary500 : Colors.grey),
+                icon: Image.asset(
+                  'assets/calendar.png',
+                  width: 24,
+                  height: 24,
+                  color: _bottomIndex == 1 ? kPrimary500 : Colors.grey,
+                ),
                 label: 'Calendar',
                 selected: _bottomIndex == 1,
-                onTap: () => Navigator.pushReplacementNamed(context, CalendarPage.routeName),
+                onTap: () => Navigator.pushReplacementNamed(
+                  context,
+                  CalendarPage.routeName,
+                ),
               ),
               const Spacer(),
               _BottomItem(
-                icon: Image.asset('assets/statspage.png', width: 24, height: 24,
-                  color: _bottomIndex == 2 ? kPrimary500 : Colors.grey),
+                icon: Image.asset(
+                  'assets/statspage.png',
+                  width: 24,
+                  height: 24,
+                  color: _bottomIndex == 2 ? kPrimary500 : Colors.grey,
+                ),
                 label: 'Stats',
                 selected: _bottomIndex == 2,
                 onTap: () {},
               ),
               _BottomItem(
-                icon: Image.asset('assets/Profile.png', width: 24, height: 24,
-                  color: _bottomIndex == 3 ? kPrimary500 : Colors.grey),
+                icon: Image.asset(
+                  'assets/profile.png',
+                  width: 24,
+                  height: 24,
+                  color: _bottomIndex == 3 ? kPrimary500 : Colors.grey,
+                ),
                 label: 'Profile',
                 selected: _bottomIndex == 3,
-                onTap: () => Navigator.pushReplacementNamed(context, ProfilePage.routeName),
+                onTap: () => Navigator.pushReplacementNamed(
+                  context,
+                  ProfilePage.routeName,
+                ),
               ),
             ],
           ),
         ),
       ),
 
-      // BODY
       body: Stack(
         children: [
-          // Header gradient
           Container(
             height: 220,
             decoration: BoxDecoration(
@@ -171,7 +241,6 @@ class _StatsPageState extends State<StatsPage> {
             ),
           ),
 
-          // Header content
           SafeArea(
             bottom: false,
             child: Padding(
@@ -192,13 +261,14 @@ class _StatsPageState extends State<StatsPage> {
             ),
           ),
 
-          // Panel isi
           Positioned.fill(
             top: 150,
             child: Container(
               decoration: BoxDecoration(
                 color: cs.surface,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(28),
+                ),
                 boxShadow: [
                   if (isLight)
                     const BoxShadow(
@@ -210,7 +280,10 @@ class _StatsPageState extends State<StatsPage> {
               ),
               child: ListView(
                 padding: EdgeInsets.fromLTRB(
-                  0, 0, 0, 110 + MediaQuery.of(context).padding.bottom,
+                  0,
+                  0,
+                  0,
+                  110 + MediaQuery.of(context).padding.bottom,
                 ),
                 children: [
                   _SegmentedTabs(
@@ -219,14 +292,12 @@ class _StatsPageState extends State<StatsPage> {
                   ),
                   const SizedBox(height: 12),
 
-                  // Chart card
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: _LineChartCard(isHabit: _tabIndex == 1),
                   ),
                   const SizedBox(height: 16),
 
-                  // Summary card
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Align(
@@ -234,9 +305,12 @@ class _StatsPageState extends State<StatsPage> {
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 500),
                         child: _SummaryCard(
-                          bgColor: cs.surfaceVariant, // tidak dipakai langsung
+                          bgColor: cs.surfaceVariant,
                           fgColor: cs.onSurface,
-                          iconBg: (_tabIndex == 0 ? kTaskGreen : kPrimary500).withOpacity(0.12),
+                          iconBg: (_tabIndex == 0
+                                  ? kTaskGreen
+                                  : kPrimary500)
+                              .withOpacity(0.12),
                           shadow: isLight
                               ? const BoxShadow(
                                   color: Color(0x14000000),
@@ -244,21 +318,23 @@ class _StatsPageState extends State<StatsPage> {
                                   offset: Offset(0, 3),
                                 )
                               : null,
+                          total: totalItems,
+                          completed: completedItems,
                         ),
                       ),
                     ),
                   ),
                   const SizedBox(height: 16),
 
-                  // List items (DISAMAKAN DENGAN HOMEPAGE)
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Column(
-                      children: _currentList.map((e) {
+                      children: currentList.map((e) {
                         final isHabit = _tabIndex == 1;
                         return _ItemTile(
                           item: e,
                           isHabit: isHabit,
+                          timeText: _formatDue(e.dueDate),
                           onToggle: () => _toggle(e),
                         );
                       }).toList(),
@@ -272,36 +348,24 @@ class _StatsPageState extends State<StatsPage> {
       ),
     );
   }
-
-  String formatDateTime(DateTime date, TimeOfDay time) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final itemDate = DateTime(date.year, date.month, date.day);
-    final timeStr = time.format(context);
-    if (itemDate == today) return 'Today, $timeStr';
-    return '${DateFormat('dd/MM').format(date)}, $timeStr';
-  }
 }
 
 /* ====================== UI PARTS ====================== */
 
-/// Util style kartu adaptif light/dark (chart & summary)
 class _CardStyle {
   static Color bg(BuildContext context) {
     final theme = Theme.of(context);
     if (theme.brightness == Brightness.light) {
       return Colors.white;
     }
-    // Dark: lembut
     return theme.colorScheme.surfaceVariant.withOpacity(0.12);
   }
 
   static Color border(BuildContext context) {
     final theme = Theme.of(context);
     if (theme.brightness == Brightness.light) {
-      return kBorderColorLight; // #EAECF0
+      return kBorderColorLight;
     }
-    // DARK MODE: bernuansa terang tipis
     return Colors.white;
   }
 
@@ -316,7 +380,7 @@ class _CardStyle {
         ),
       ];
     }
-    return const []; // dark: tanpa shadow
+    return const [];
   }
 }
 
@@ -331,19 +395,23 @@ class _HeaderGreeting extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Hi, Qoqo 👋🏻',
-                style: GoogleFonts.inter(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w600,
-                )),
+            Text(
+              'Hi, Qoqo 👋🏻',
+              style: GoogleFonts.inter(
+                color: Colors.white,
+                fontSize: 24,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             const SizedBox(height: 2),
-            Text('Ready to be productive today?',
-                style: GoogleFonts.inter(
-                  color: Colors.white70,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w400,
-                )),
+            Text(
+              'Ready to be productive today?',
+              style: GoogleFonts.inter(
+                color: Colors.white70,
+                fontSize: 12,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
           ],
         ),
       ),
@@ -375,9 +443,14 @@ class _BottomItem extends StatelessWidget {
           children: [
             SizedBox(width: 24, height: 24, child: icon),
             const SizedBox(height: 4),
-            Text(label,
-                style: GoogleFonts.inter(
-                    color: color, fontSize: 12, fontWeight: FontWeight.w500)),
+            Text(
+              label,
+              style: GoogleFonts.inter(
+                color: color,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ],
         ),
       ),
@@ -397,7 +470,8 @@ class _SegmentedTabs extends StatelessWidget {
       children: [
         Expanded(
           child: _tabButton(
-            context, 'Task',
+            context,
+            'Task',
             selected: index == 0,
             color: kTaskGreen,
             divider: divider,
@@ -406,7 +480,8 @@ class _SegmentedTabs extends StatelessWidget {
         ),
         Expanded(
           child: _tabButton(
-            context, 'Habit',
+            context,
+            'Habit',
             selected: index == 1,
             color: kPrimary500,
             divider: divider,
@@ -418,7 +493,8 @@ class _SegmentedTabs extends StatelessWidget {
   }
 
   Widget _tabButton(
-    BuildContext context, String text, {
+    BuildContext context,
+    String text, {
     required bool selected,
     required Color color,
     required Color divider,
@@ -458,9 +534,9 @@ class _LineChartCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme  = Theme.of(context);
-    final cs     = theme.colorScheme;
-    final isLight= theme.brightness == Brightness.light;
+    final theme   = Theme.of(context);
+    final cs      = theme.colorScheme;
+    final isLight = theme.brightness == Brightness.light;
 
     final accent = isHabit ? kPrimary500 : kTaskGreen;
     final area2  = isHabit ? const Color(0xFF4FC3F7) : const Color(0xFF00C48C);
@@ -491,16 +567,30 @@ class _LineChartCard extends StatelessWidget {
               CircleAvatar(
                 radius: 12,
                 backgroundColor: accent.withOpacity(.15),
-                child: Icon(Icons.show_chart_rounded, size: 16, color: accent),
+                child: Icon(
+                  Icons.show_chart_rounded,
+                  size: 16,
+                  color: accent,
+                ),
               ),
               const SizedBox(width: 8),
-              Text('Progress',
-                  style: GoogleFonts.inter(
-                    fontSize: 16, fontWeight: FontWeight.w400, color: titleColor)),
+              Text(
+                'Progress',
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w400,
+                  color: titleColor,
+                ),
+              ),
               const SizedBox(width: 6),
-              Text('Comparison by week',
-                  style: GoogleFonts.inter(
-                    fontSize: 10, fontWeight: FontWeight.w500, color: subtitleColor)),
+              Text(
+                'Comparison by week',
+                style: GoogleFonts.inter(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
+                  color: subtitleColor,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -508,40 +598,67 @@ class _LineChartCard extends StatelessWidget {
             height: 160,
             child: LineChart(
               LineChartData(
-                minY: 0, maxY: 1, minX: 1, maxX: values.length.toDouble(),
+                minY: 0,
+                maxY: 1,
+                minX: 1,
+                maxX: values.length.toDouble(),
                 gridData: FlGridData(
-                  show: true, drawVerticalLine: false, horizontalInterval: 0.25,
+                  show: true,
+                  drawVerticalLine: false,
+                  horizontalInterval: 0.25,
                   getDrawingHorizontalLine: (y) {
                     final pct = (y * 100).round();
-                    if (pct % 25 != 0) return const FlLine(color: Colors.transparent);
-                    return FlLine(color: gridColor, strokeWidth: 1, dashArray: [4, 6]);
+                    if (pct % 25 != 0) {
+                      return const FlLine(color: Colors.transparent);
+                    }
+                    return FlLine(
+                      color: gridColor,
+                      strokeWidth: 1,
+                      dashArray: [4, 6],
+                    );
                   },
                 ),
                 titlesData: FlTitlesData(
-                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  topTitles:   const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  topTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
                   leftTitles: AxisTitles(
                     sideTitles: SideTitles(
-                      showTitles: true, reservedSize: 40,
+                      showTitles: true,
+                      reservedSize: 40,
                       getTitlesWidget: (value, meta) {
                         final pct = (value * 100).round();
                         const keep = {0, 25, 50, 75, 100};
-                        if (!keep.contains(pct)) return const SizedBox.shrink();
-                        return Text('$pct%',
-                            style: GoogleFonts.inter(
-                              fontSize: 10, fontWeight: FontWeight.w700, color: axisLabelColor));
+                        if (!keep.contains(pct)) {
+                          return const SizedBox.shrink();
+                        }
+                        return Text(
+                          '$pct%',
+                          style: GoogleFonts.inter(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: axisLabelColor,
+                          ),
+                        );
                       },
                     ),
                   ),
                   bottomTitles: AxisTitles(
                     sideTitles: SideTitles(
-                      showTitles: true, interval: 1,
+                      showTitles: true,
+                      interval: 1,
                       getTitlesWidget: (value, meta) => Padding(
                         padding: const EdgeInsets.only(top: 6),
                         child: Text(
                           (value.toInt() + 3).toString(),
                           style: GoogleFonts.inter(
-                            fontSize: 10, fontWeight: FontWeight.w700, color: axisLabelColor),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: axisLabelColor,
+                          ),
                         ),
                       ),
                     ),
@@ -550,7 +667,10 @@ class _LineChartCard extends StatelessWidget {
                 borderData: FlBorderData(show: false),
                 lineBarsData: [
                   LineChartBarData(
-                    spots: [for (int i = 0; i < values.length; i++) FlSpot((i + 1).toDouble(), values[i])],
+                    spots: [
+                      for (int i = 0; i < values.length; i++)
+                        FlSpot((i + 1).toDouble(), values[i]),
+                    ],
                     isCurved: true,
                     color: accent,
                     barWidth: 4,
@@ -558,8 +678,12 @@ class _LineChartCard extends StatelessWidget {
                     belowBarData: BarAreaData(
                       show: true,
                       gradient: LinearGradient(
-                        colors: [accent.withOpacity(.35), area2.withOpacity(.15)],
-                        begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                        colors: [
+                          accent.withOpacity(.35),
+                          area2.withOpacity(.15),
+                        ],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
                       ),
                     ),
                   ),
@@ -573,7 +697,10 @@ class _LineChartCard extends StatelessWidget {
                       return LineTooltipItem(
                         '$pct%',
                         GoogleFonts.inter(
-                          fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white),
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
                       );
                     }).toList(),
                   ),
@@ -588,16 +715,20 @@ class _LineChartCard extends StatelessWidget {
 }
 
 class _SummaryCard extends StatelessWidget {
-  final Color bgColor; // tidak dipakai langsung
+  final Color bgColor;
   final Color fgColor;
   final Color iconBg;
   final BoxShadow? shadow;
+  final int total;
+  final int completed;
 
   const _SummaryCard({
     required this.bgColor,
     required this.fgColor,
     required this.iconBg,
     this.shadow,
+    required this.total,
+    required this.completed,
   });
 
   @override
@@ -606,22 +737,39 @@ class _SummaryCard extends StatelessWidget {
     final failColor     = Colors.red.shade600;
     final subtitleColor = fgColor.withOpacity(0.7);
 
-    Widget stat(String title, String value, double width, {Color? valueColor}) {
+    final int successRate = total == 0
+        ? 0
+        : ((completed / total) * 100).round();
+    final int failed  = total - completed;
+    final int skipped = 0;
+
+    Widget stat(String title, String value, double width,
+        {Color? valueColor}) {
       return SizedBox(
         width: width,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Text(value,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.inter(
-                  fontSize: 20, fontWeight: FontWeight.w600, color: valueColor ?? fgColor)),
+            Text(
+              value,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 20,
+                fontWeight: FontWeight.w600,
+                color: valueColor ?? fgColor,
+              ),
+            ),
             const SizedBox(height: 2),
-            Text(title,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.inter(
-                  fontSize: 10, fontWeight: FontWeight.w500, color: subtitleColor)),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
+                color: subtitleColor,
+              ),
+            ),
           ],
         ),
       );
@@ -648,27 +796,48 @@ class _SummaryCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  CircleAvatar(radius: 12, backgroundColor: iconBg,
-                      child: Icon(Icons.insights_rounded, size: 16, color: fgColor)),
+                  CircleAvatar(
+                    radius: 12,
+                    backgroundColor: iconBg,
+                    child: Icon(
+                      Icons.insights_rounded,
+                      size: 16,
+                      color: fgColor,
+                    ),
+                  ),
                   const SizedBox(width: 8),
-                  Text("Summary",
-                      style: GoogleFonts.inter(
-                        fontSize: 16, fontWeight: FontWeight.w400, color: fgColor)),
+                  Text(
+                    "Summary",
+                    style: GoogleFonts.inter(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w400,
+                      color: fgColor,
+                    ),
+                  ),
                 ],
               ),
               const SizedBox(height: 6),
-              Text("You’re 75% toward your daily goals",
-                  style: GoogleFonts.inter(
-                    fontSize: 12, fontWeight: FontWeight.w400, color: subtitleColor)),
+              Text(
+                "You’re $successRate% toward your daily goals",
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w400,
+                  color: subtitleColor,
+                ),
+              ),
               const SizedBox(height: 12),
               Wrap(
-                spacing: colGap, runSpacing: 10,
-                alignment: WrapAlignment.center, runAlignment: WrapAlignment.center,
+                spacing: colGap,
+                runSpacing: 10,
+                alignment: WrapAlignment.center,
+                runAlignment: WrapAlignment.center,
                 children: [
-                  stat('Success Rate', '75%', itemW, valueColor: successColor),
-                  stat('Completed',    '28',  itemW),
-                  stat('Skipped',      '03',  itemW),
-                  stat('Failed',       '3',   itemW, valueColor: failColor),
+                  stat('Success Rate', '$successRate%', itemW,
+                      valueColor: successColor),
+                  stat('Completed', '$completed', itemW),
+                  stat('Skipped', '$skipped', itemW),
+                  stat('Failed', '$failed', itemW,
+                      valueColor: failColor),
                 ],
               ),
             ],
@@ -679,23 +848,16 @@ class _SummaryCard extends StatelessWidget {
   }
 }
 
-class _Item {
-  final String title;
-  final String chip;
-  final String time;
-  bool done;
-  final Color chipColor;
-  _Item(this.title, this.chip, this.time, this.done, {required this.chipColor});
-}
-
-/// LIST CARD — Disamakan dengan HomePage
 class _ItemTile extends StatelessWidget {
   final _Item item;
   final bool isHabit;
+  final String timeText;
   final VoidCallback onToggle;
+
   const _ItemTile({
     required this.item,
     required this.isHabit,
+    required this.timeText,
     required this.onToggle,
   });
 
@@ -705,12 +867,13 @@ class _ItemTile extends StatelessWidget {
     final cs      = theme.colorScheme;
     final isLight = theme.brightness == Brightness.light;
 
-    // === Sama dengan HomePage ===
     final accent       = isHabit ? kPrimary500 : kTaskGreen;
     final Color bgSoft = isLight
         ? accent.withOpacity(.10)
         : cs.surfaceVariant.withOpacity(0.30);
-    final Color border = cs.outlineVariant.withOpacity(isLight ? 0.35 : 0.60);
+    final Color border = cs.outlineVariant.withOpacity(
+      isLight ? 0.35 : 0.60,
+    );
     final Color subtle = cs.onSurfaceVariant;
 
     return Container(
@@ -727,8 +890,8 @@ class _ItemTile extends StatelessWidget {
             onTap: onToggle,
             child: _CheckCircle(
               checked: item.done,
-              color: accent,                               // fill saat checked
-              borderColor: isLight ? accent : cs.outlineVariant, // outline unchecked
+              color: accent,
+              borderColor: isLight ? accent : cs.outlineVariant,
             ),
           ),
           const SizedBox(width: 10),
@@ -749,10 +912,19 @@ class _ItemTile extends StatelessWidget {
                   children: [
                     _Chip(text: item.chip, color: item.chipColor),
                     const SizedBox(width: 8),
-                    Icon(Icons.access_time_rounded, size: 14, color: subtle),
+                    Icon(
+                      Icons.access_time_rounded,
+                      size: 14,
+                      color: subtle,
+                    ),
                     const SizedBox(width: 4),
-                    Text(item.time,
-                        style: GoogleFonts.inter(color: subtle, fontSize: 12)),
+                    Text(
+                      timeText,
+                      style: GoogleFonts.inter(
+                        color: subtle,
+                        fontSize: 12,
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -790,7 +962,9 @@ class _CheckCircle extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: checked ? color : Colors.transparent,
-        border: checked ? null : Border.all(color: effectiveBorderColor, width: 2),
+        border: checked
+            ? null
+            : Border.all(color: effectiveBorderColor, width: 2),
       ),
       child: checked
           ? Icon(Icons.check, color: effectiveIconColor, size: 20)
@@ -807,8 +981,10 @@ class _Chip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isLight = Theme.of(context).brightness == Brightness.light;
-    final chipBg = isLight ? color.withOpacity(.18) : color.withOpacity(0.30);
-    final chipFg = isLight ? color : HSLColor.fromColor(color).withLightness(0.7).toColor();
+    final chipBg  = isLight ? color.withOpacity(.18) : color.withOpacity(0.30);
+    final chipFg  = isLight
+        ? color
+        : HSLColor.fromColor(color).withLightness(0.7).toColor();
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -818,7 +994,11 @@ class _Chip extends StatelessWidget {
       ),
       child: Text(
         text,
-        style: GoogleFonts.inter(fontSize: 11, color: chipFg, fontWeight: FontWeight.w700),
+        style: GoogleFonts.inter(
+          fontSize: 11,
+          color: chipFg,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }

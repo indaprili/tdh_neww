@@ -5,13 +5,21 @@ import 'package:table_calendar/table_calendar.dart';
 
 // Halaman lain
 import 'home_page.dart';
+import 'notification_service.dart';
 import 'stats_page.dart';
 import 'profile_page.dart';
 import 'add_edit_item_sheet.dart' as AddEditSheet;
 
+// MODEL & DATABASE
+import 'todo_item.dart';
+import 'todo_database.dart';
+
+// Biar nama _Item di UI tetap kepake
+typedef _Item = TodoItem;
+
 // --- KONSTANTA ---
 const kPrimary500 = Color(0xFF1778FB); // blue
-const kTaskGreen = Color(0xFF27AE60);  // green (Task)
+const kTaskGreen = Color(0xFF27AE60); // green (Task)
 
 class CalendarPage extends StatefulWidget {
   static const routeName = '/calendar';
@@ -22,14 +30,28 @@ class CalendarPage extends StatefulWidget {
 
 class _CalendarPageState extends State<CalendarPage> {
   int _bottomIndex = 1; // Indeks 'Calendar'
-  int _tabIndex = 0;    // 0 = Task, 1 = Habit
+  int _tabIndex = 0; // 0 = Task, 1 = Habit
 
   DateTime _focusedDay = DateTime.now();
   DateTime _selectedDay = DateTime.now();
 
-  // Data contoh (ganti sesuai data-mu)
+  // Data sekarang ambil dari database
   List<_Item> tasks = [];
   List<_Item> habits = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadItemsFromDb();
+  }
+
+  Future<void> _loadItemsFromDb() async {
+    final all = await TodoDatabase.instance.getAllItems();
+    setState(() {
+      tasks = all.where((e) => !e.isHabit).toList();
+      habits = all.where((e) => e.isHabit).toList();
+    });
+  }
 
   bool _isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
@@ -63,6 +85,16 @@ class _CalendarPageState extends State<CalendarPage> {
     return '$dd/$mm';
   }
 
+  void _toggleItem(_Item item) {
+    setState(() {
+      item.done = !item.done;
+    });
+    if (item.id != null) {
+      // fire & forget, ga perlu di-await di sini
+      TodoDatabase.instance.updateItem(item);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -71,26 +103,26 @@ class _CalendarPageState extends State<CalendarPage> {
     final Color accentColor = _tabIndex == 0 ? kTaskGreen : kPrimary500;
 
     return Scaffold(
-      backgroundColor: cs.surface, // CHANGED (was Colors.white)
+      backgroundColor: cs.surface,
       extendBody: true,
 
-      // --- APP BAR: cuma warna yang disesuaikan ---
+      // --- APP BAR ---
       appBar: AppBar(
-        backgroundColor: cs.surface, // CHANGED (was Colors.white)
+        backgroundColor: cs.surface,
         elevation: 0,
         centerTitle: true,
         automaticallyImplyLeading: false,
         title: Text(
           'Calendar',
           style: GoogleFonts.inter(
-            color: cs.onSurface, // CHANGED (was Colors.black)
+            color: cs.onSurface,
             fontSize: 22,
             fontWeight: FontWeight.w700,
           ),
         ),
       ),
 
-      // --- FAB dengan "bulatan belakang" (efek gonjolan) ---
+      // --- FAB + bulatan ---
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       floatingActionButton: Stack(
         alignment: Alignment.center,
@@ -128,16 +160,40 @@ class _CalendarPageState extends State<CalendarPage> {
                 ),
               );
               if (res == null) return;
-              if (res.action == AddEditSheet.AddEditAction.save && res.data != null) {
+
+              if (res.action == AddEditSheet.AddEditAction.save &&
+                  res.data != null) {
                 final d = res.data!;
-                final due = d.dueDate ?? _selectedDay;
+                final baseDate = d.dueDate ?? _selectedDay;
+                DateTime due;
+
+                if (d.dueTime != null) {
+                  due = DateTime(
+                    baseDate.year,
+                    baseDate.month,
+                    baseDate.day,
+                    d.dueTime!.hour,
+                    d.dueTime!.minute,
+                  );
+                } else {
+                  due = baseDate;
+                }
+
                 final newItem = _Item(
-                  d.title,
-                  d.tag,
-                  due,
-                  d.done,
+                  title: d.title,
+                  chip: d.tag,
+                  dueDate: due,
+                  done: d.done,
                   chipColor: d.chipColor,
+                  isHabit: _tabIndex == 1,
                 );
+
+                final id = await TodoDatabase.instance.insertItem(newItem);
+                newItem.id = id;
+                if (newItem.dueDate != null) {
+                  await NotificationService().scheduleReminder(newItem);
+                }
+
                 setState(() {
                   if (_tabIndex == 0) {
                     tasks.add(newItem);
@@ -152,7 +208,7 @@ class _CalendarPageState extends State<CalendarPage> {
         ],
       ),
 
-      // --- Bottom bar dengan notch (UI tetap, warna tema) ---
+      // --- Bottom bar ---
       bottomNavigationBar: BottomAppBar(
         color: cs.surface,
         elevation: 8,
@@ -167,10 +223,17 @@ class _CalendarPageState extends State<CalendarPage> {
                 icon: Image.asset('assets/Home.png', width: 24, height: 24),
                 label: 'Home',
                 selected: _bottomIndex == 0,
-                onTap: () => Navigator.pushReplacementNamed(context, HomePage.routeName),
+                onTap: () => Navigator.pushReplacementNamed(
+                  context,
+                  HomePage.routeName,
+                ),
               ),
               _BottomItem(
-                icon: Image.asset('assets/calender_icon_habit.png', width: 24, height: 24),
+                icon: Image.asset(
+                  'assets/calender_icon_habit.png',
+                  width: 24,
+                  height: 24,
+                ),
                 label: 'Calendar',
                 selected: _bottomIndex == 1,
                 onTap: () {}, // sudah di halaman ini
@@ -180,20 +243,26 @@ class _CalendarPageState extends State<CalendarPage> {
                 icon: Image.asset('assets/Stats.png', width: 24, height: 24),
                 label: 'Stats',
                 selected: _bottomIndex == 2,
-                onTap: () => Navigator.pushReplacementNamed(context, StatsPage.routeName),
+                onTap: () => Navigator.pushReplacementNamed(
+                  context,
+                  StatsPage.routeName,
+                ),
               ),
               _BottomItem(
-                icon: Image.asset('assets/Profile.png', width: 24, height: 24),
+                icon: Image.asset('assets/profile.png', width: 24, height: 24),
                 label: 'Profile',
                 selected: _bottomIndex == 3,
-                onTap: () => Navigator.pushReplacementNamed(context, ProfilePage.routeName),
+                onTap: () => Navigator.pushReplacementNamed(
+                  context,
+                  ProfilePage.routeName,
+                ),
               ),
             ],
           ),
         ),
       ),
 
-      // --- BODY: kalender di atas, panel bawah scrollable ---
+      // --- BODY: kalender + panel bawah ---
       body: Column(
         children: [
           // KALENDER
@@ -217,19 +286,21 @@ class _CalendarPageState extends State<CalendarPage> {
                 titleTextStyle: GoogleFonts.inter(
                   fontSize: 18,
                   fontWeight: FontWeight.w800,
-                  color: cs.onSurface, // CHANGED (was black)
+                  color: cs.onSurface,
                 ),
-                leftChevronIcon: Icon(Icons.chevron_left, color: cs.onSurface),   // CHANGED
-                rightChevronIcon: Icon(Icons.chevron_right, color: cs.onSurface), // CHANGED
+                leftChevronIcon:
+                    Icon(Icons.chevron_left, color: cs.onSurface),
+                rightChevronIcon:
+                    Icon(Icons.chevron_right, color: cs.onSurface),
               ),
               daysOfWeekStyle: DaysOfWeekStyle(
                 weekdayStyle: GoogleFonts.inter(
-                  color: cs.onSurfaceVariant, // CHANGED (was black54)
+                  color: cs.onSurfaceVariant,
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                 ),
                 weekendStyle: GoogleFonts.inter(
-                  color: cs.onSurfaceVariant, // CHANGED (was black54)
+                  color: cs.onSurfaceVariant,
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
                 ),
@@ -238,13 +309,13 @@ class _CalendarPageState extends State<CalendarPage> {
               ),
               calendarStyle: CalendarStyle(
                 outsideDaysVisible: false,
-                defaultTextStyle: TextStyle(color: cs.onSurface),  // CHANGED
-                weekendTextStyle: TextStyle(color: cs.onSurface),  // CHANGED
+                defaultTextStyle: TextStyle(color: cs.onSurface),
+                weekendTextStyle: TextStyle(color: cs.onSurface),
                 todayDecoration: BoxDecoration(
                   color: accentColor.withOpacity(.18),
                   shape: BoxShape.circle,
                 ),
-                todayTextStyle: TextStyle(color: cs.onSurface),     // CHANGED
+                todayTextStyle: TextStyle(color: cs.onSurface),
                 selectedDecoration: BoxDecoration(
                   color: accentColor,
                   shape: BoxShape.circle,
@@ -257,10 +328,9 @@ class _CalendarPageState extends State<CalendarPage> {
             ),
           ),
 
-          // PEMBATAS TIPIS
-          Divider(height: 1, color: theme.dividerColor), // CHANGED (warna ikut tema)
+          Divider(height: 1, color: theme.dividerColor),
 
-          // PANEL BAWAH (scrollable)
+          // PANEL BAWAH
           Expanded(
             child: ListView(
               padding: const EdgeInsets.only(bottom: 110),
@@ -277,7 +347,7 @@ class _CalendarPageState extends State<CalendarPage> {
                       style: GoogleFonts.inter(
                         fontSize: 14,
                         fontWeight: FontWeight.w400,
-                        color: cs.onSurface, // CHANGED
+                        color: cs.onSurface,
                       ),
                     ),
                   ),
@@ -310,44 +380,79 @@ class _CalendarPageState extends State<CalendarPage> {
                           ),
                         )
                       : Column(
-                          children: _currentList.asMap().entries.map((entry) {
+                          children:
+                              _currentList.asMap().entries.map((entry) {
                             final item = entry.value;
-                            final source = _tabIndex == 0 ? tasks : habits;
+                            final source =
+                                _tabIndex == 0 ? tasks : habits;
                             final realIndex = source.indexOf(item);
                             return _ItemTile(
                               item: item,
                               timeText: _formatDue(item.dueDate),
                               isHabit: _tabIndex == 1,
-                              onToggle: () => setState(() => item.done = !item.done),
+                              onToggle: () => _toggleItem(item),
                               onTap: () async {
-                                final res = await AddEditSheet.AddEditItemSheet.show(
+                                final res = await AddEditSheet
+                                    .AddEditItemSheet.show(
                                   context,
                                   isHabit: _tabIndex == 1,
                                   initial: AddEditSheet.ItemData(
                                     title: item.title,
                                     description: '',
                                     tag: item.chip,
-                                    isHabit: _tabIndex == 1,
+                                    isHabit: item.isHabit,
                                     done: item.done,
                                     chipColor: item.chipColor,
                                     dueDate: item.dueDate,
                                   ),
                                 );
                                 if (res == null) return;
-                                if (res.action == AddEditSheet.AddEditAction.delete) {
-                                  setState(() => source.removeAt(realIndex));
-                                } else if (res.action == AddEditSheet.AddEditAction.save &&
+
+                                if (res.action ==
+                                    AddEditSheet
+                                        .AddEditAction.delete) {
+                                  final removed =
+                                      source.removeAt(realIndex);
+                                  setState(() {});
+                                  if (removed.id != null) {
+                                    await TodoDatabase.instance
+                                        .deleteItem(removed.id!);
+                                  }
+                                } else if (res.action ==
+                                        AddEditSheet
+                                            .AddEditAction.save &&
                                     res.data != null) {
                                   final d = res.data!;
-                                  setState(() {
-                                    source[realIndex] = _Item(
-                                      d.title,
-                                      d.tag,
-                                      d.dueDate ?? item.dueDate,
-                                      d.done,
-                                      chipColor: d.chipColor,
+                                  final baseDate =
+                                      d.dueDate ?? item.dueDate;
+                                  DateTime newDue;
+                                  if (d.dueTime != null) {
+                                    newDue = DateTime(
+                                      baseDate.year,
+                                      baseDate.month,
+                                      baseDate.day,
+                                      d.dueTime!.hour,
+                                      d.dueTime!.minute,
                                     );
+                                  } else {
+                                    newDue = baseDate;
+                                  }
+
+                                  final updated = _Item(
+                                    id: item.id,
+                                    title: d.title,
+                                    chip: d.tag,
+                                    dueDate: newDue,
+                                    done: d.done,
+                                    chipColor: d.chipColor,
+                                    isHabit: item.isHabit,
+                                  );
+
+                                  setState(() {
+                                    source[realIndex] = updated;
                                   });
+                                  await TodoDatabase.instance
+                                      .updateItem(updated);
                                 }
                               },
                             );
@@ -452,7 +557,9 @@ class _BottomItem extends StatelessWidget {
     final theme = Theme.of(context);
     final color = selected
         ? kPrimary500
-        : (theme.brightness == Brightness.dark ? Colors.white70 : Colors.black54);
+        : (theme.brightness == Brightness.dark
+            ? Colors.white70
+            : Colors.black54);
     return Expanded(
       child: InkWell(
         onTap: onTap,
@@ -489,7 +596,8 @@ class _ProgressCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final title = isHabit ? "Today's Habit" : "Today's Task";
-    final sub   = isHabit ? "Great progress! Almost there 💪" : "Focus on What Matters! 🔥";
+    final sub =
+        isHabit ? "Great progress! Almost there 💪" : "Focus on What Matters! 🔥";
     final colors = isHabit
         ? [kPrimary500, const Color(0xFF4FC3F7)]
         : [const Color(0xFF2ECC71), const Color(0xFF00C48C)];
@@ -518,7 +626,9 @@ class _ProgressCard extends StatelessWidget {
                   child: CircularProgressIndicator(
                     value: percent,
                     strokeWidth: 5,
-                    valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                    valueColor: const AlwaysStoppedAnimation<Color>(
+                      Colors.white,
+                    ),
                     backgroundColor: Colors.white24,
                   ),
                 ),
@@ -544,26 +654,32 @@ class _ProgressCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title,
-                    style: GoogleFonts.inter(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w700,
-                    )),
+                Text(
+                  title,
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
                 const SizedBox(height: 2),
-                Text(sub,
-                    style: GoogleFonts.inter(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    )),
+                Text(
+                  sub,
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
                 const SizedBox(height: 4),
-                Text(completedText,
-                    style: GoogleFonts.inter(
-                      color: Colors.white70,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w400,
-                    )),
+                Text(
+                  completedText,
+                  style: GoogleFonts.inter(
+                    color: Colors.white70,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
               ],
             ),
           ),
@@ -581,8 +697,11 @@ class _Chip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isLight = Theme.of(context).brightness == Brightness.light;
-    final Color chipBg = isLight ? color.withOpacity(.18) : color.withOpacity(0.3);
-    final Color chipFg = isLight ? color : HSLColor.fromColor(color).withLightness(0.7).toColor();
+    final Color chipBg =
+        isLight ? color.withOpacity(.18) : color.withOpacity(0.3);
+    final Color chipFg = isLight
+        ? color
+        : HSLColor.fromColor(color).withLightness(0.7).toColor();
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -606,7 +725,11 @@ class _CheckCircle extends StatelessWidget {
   final bool checked;
   final Color color;
   final Color? borderColor;
-  const _CheckCircle({required this.checked, required this.color, this.borderColor});
+  const _CheckCircle({
+    required this.checked,
+    required this.color,
+    this.borderColor,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -618,9 +741,13 @@ class _CheckCircle extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: checked ? color : Colors.transparent,
-        border: checked ? null : Border.all(color: effectiveBorderColor, width: 2),
+        border: checked
+            ? null
+            : Border.all(color: effectiveBorderColor, width: 2),
       ),
-      child: checked ? const Icon(Icons.check, color: Colors.white, size: 20) : null,
+      child: checked
+          ? const Icon(Icons.check, color: Colors.white, size: 20)
+          : null,
     );
   }
 }
@@ -681,7 +808,7 @@ class _ItemTile extends StatelessWidget {
                     style: GoogleFonts.inter(
                       fontSize: 14,
                       fontWeight: FontWeight.w500,
-                      color: cs.onSurface, // CHANGED (biar kontras di dark)
+                      color: cs.onSurface,
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -689,11 +816,13 @@ class _ItemTile extends StatelessWidget {
                     children: [
                       _Chip(text: item.chip, color: item.chipColor),
                       const SizedBox(width: 8),
-                      Icon(Icons.access_time_rounded, size: 14, color: subtleColor),
+                      Icon(Icons.access_time_rounded,
+                          size: 14, color: subtleColor),
                       const SizedBox(width: 4),
                       Text(
                         timeText,
-                        style: GoogleFonts.inter(color: subtleColor, fontSize: 12),
+                        style:
+                            GoogleFonts.inter(color: subtleColor, fontSize: 12),
                       ),
                     ],
                   ),
@@ -707,14 +836,4 @@ class _ItemTile extends StatelessWidget {
       ),
     );
   }
-}
-
-// Model data
-class _Item {
-  final String title;
-  final String chip;
-  DateTime dueDate;
-  bool done;
-  final Color chipColor;
-  _Item(this.title, this.chip, this.dueDate, this.done, {required this.chipColor});
 }

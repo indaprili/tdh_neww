@@ -49,17 +49,23 @@ class ItemData {
   static Color _colorFromTag(String tag) {
     // Fungsi ini bisa tetap sama, karena warna tag spesifik
     switch (tag.toLowerCase()) {
-      case 'work': return const Color(0xFF8E44AD);
-      case 'personal': return const Color(0xFFF39C12);
-      case 'health': return const Color(0xFF16A085);
-      case 'daily': return const Color(0xFF2980B9);
-      case 'weekly': return const Color(0xFFE91E63);
-      case '30 min': return const Color(0xFF27AE60);
-      default: return kPrimary500;
+      case 'work':
+        return const Color(0xFF8E44AD);
+      case 'personal':
+        return const Color(0xFFF39C12);
+      case 'health':
+        return const Color(0xFF16A085);
+      case 'daily':
+        return const Color(0xFF2980B9);
+      case 'weekly':
+        return const Color(0xFFE91E63);
+      case '30 min':
+        return const Color(0xFF27AE60);
+      default:
+        return kPrimary500;
     }
   }
 }
-
 
 class AddEditItemSheet extends StatefulWidget {
   final bool isHabit;
@@ -150,6 +156,10 @@ class _AddEditItemSheetState extends State<AddEditItemSheet> {
       ).showSnackBar(const SnackBar(content: Text('Title can\'t be empty')));
       return;
     }
+    // fallback: kalau user belum pilih tanggal/jam
+    final effectiveDate = _date ?? DateTime.now();
+    final effectiveTime = _time ?? TimeOfDay.now();   
+
     final data = ItemData(
       title: title,
       description: _descCtrl.text.trim(),
@@ -168,10 +178,18 @@ class _AddEditItemSheetState extends State<AddEditItemSheet> {
   }
 
   void _pickTag() async {
-    final List<String> tags = ['Work', 'Personal', 'Health', 'Daily', 'Weekly', '30 min'];
+    final List<String> tags = [
+      'Work',
+      'Personal',
+      'Health',
+      'Daily',
+      'Weekly',
+      '30 min',
+    ];
     final Color modalBgColor = Theme.of(context).colorScheme.surface;
     final Color primaryColor = Theme.of(context).colorScheme.primary;
-    final Color textColor = Theme.of(context).textTheme.bodyLarge?.color ?? Colors.black87;
+    final Color textColor =
+        Theme.of(context).textTheme.bodyLarge?.color ?? Colors.black87;
 
     final String? picked = await showModalBottomSheet<String>(
       context: context,
@@ -189,15 +207,29 @@ class _AddEditItemSheetState extends State<AddEditItemSheet> {
               padding: const EdgeInsets.all(16),
               child: Text(
                 'Select Tag',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: textColor), // Warna tema
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: textColor,
+                ), // Warna tema
                 textAlign: TextAlign.center,
               ),
             ),
-            ...tags.map((tag) => ListTile(
-              title: Text(tag, style: TextStyle(fontWeight: FontWeight.w500, color: textColor)), // Warna tema
-              trailing: _tag == tag ? Icon(Icons.check, color: primaryColor) : null, // Warna tema
-              onTap: () => Navigator.pop(ctx, tag),
-            )),
+            ...tags.map(
+              (tag) => ListTile(
+                title: Text(
+                  tag,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w500,
+                    color: textColor,
+                  ),
+                ), // Warna tema
+                trailing: _tag == tag
+                    ? Icon(Icons.check, color: primaryColor)
+                    : null, // Warna tema
+                onTap: () => Navigator.pop(ctx, tag),
+              ),
+            ),
             const SizedBox(height: 12),
           ],
         ),
@@ -223,11 +255,14 @@ class _AddEditItemSheetState extends State<AddEditItemSheet> {
 
     // Ambil warna tema di sini agar tidak perlu diulang di builder
     final Color modalBgColor = Theme.of(context).colorScheme.surface;
-    final Color calendarBgColor = Theme.of(context).brightness == Brightness.light
+    final Color calendarBgColor =
+        Theme.of(context).brightness == Brightness.light
         ? const Color(0xFFF9FAFC)
         : Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3);
-    final Color headerTextColor = Theme.of(context).textTheme.titleLarge?.color ?? Colors.black87;
-    final Color defaultTextColor = Theme.of(context).textTheme.bodyMedium?.color ?? Colors.black87;
+    final Color headerTextColor =
+        Theme.of(context).textTheme.titleLarge?.color ?? Colors.black87;
+    final Color defaultTextColor =
+        Theme.of(context).textTheme.bodyMedium?.color ?? Colors.black87;
     final Color todayBgColor = kGreen500.withOpacity(0.3);
     final Color weekendTextColor = Colors.grey;
     final Color selectedTextColor = Colors.white;
@@ -241,7 +276,8 @@ class _AddEditItemSheetState extends State<AddEditItemSheet> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
       builder: (BuildContext sheetContext) {
-        return StatefulBuilder( // StatefulBuilder penting untuk update UI modal
+        return StatefulBuilder(
+          // StatefulBuilder penting untuk update UI modal
           builder: (BuildContext context, StateSetter setModalState) {
             return SafeArea(
               top: false,
@@ -258,10 +294,14 @@ class _AddEditItemSheetState extends State<AddEditItemSheet> {
                       child: Row(
                         children: [
                           GestureDetector(
-                            onTap: () => Navigator.pop(sheetContext), // Cukup pop
+                            onTap: () =>
+                                Navigator.pop(sheetContext), // Cukup pop
                             child: const Text(
                               'Cancel',
-                              style: TextStyle(fontWeight: FontWeight.w600, color: kGreen500),
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: kGreen500,
+                              ),
                             ),
                           ),
                           const Spacer(),
@@ -311,19 +351,21 @@ class _AddEditItemSheetState extends State<AddEditItemSheet> {
                         lastDay: DateTime.utc(2050, 12, 31),
                         focusedDay: _focusedDay,
                         // Gunakan tempSelectedDay untuk seleksi di modal ini
-                        selectedDayPredicate: (day) => isSameDay(tempSelectedDay, day),
+                        selectedDayPredicate: (day) =>
+                            isSameDay(tempSelectedDay, day),
                         onDaySelected: (selectedDay, focusedDay) {
-                           // Gunakan setModalState untuk update UI modal
+                          // Gunakan setModalState untuk update UI modal
                           setModalState(() {
                             tempSelectedDay = selectedDay;
-                            _focusedDay = focusedDay; // Update focused agar kalender pindah
+                            _focusedDay =
+                                focusedDay; // Update focused agar kalender pindah
                           });
                         },
                         onPageChanged: (focusedDay) {
-                           // Gunakan setModalState untuk update header modal saat ganti bulan
-                           setModalState(() {
-                              _focusedDay = focusedDay;
-                           });
+                          // Gunakan setModalState untuk update header modal saat ganti bulan
+                          setModalState(() {
+                            _focusedDay = focusedDay;
+                          });
                         },
                         headerVisible: false, // Header custom di atas
                         daysOfWeekHeight: 20,
@@ -344,7 +386,10 @@ class _AddEditItemSheetState extends State<AddEditItemSheet> {
                         daysOfWeekStyle: DaysOfWeekStyle(
                           weekdayStyle: TextStyle(color: weekendTextColor),
                           weekendStyle: TextStyle(color: weekendTextColor),
-                          dowTextFormatter: (date, locale) => DateFormat('EE', locale).format(date).substring(0,2),
+                          dowTextFormatter: (date, locale) => DateFormat(
+                            'EE',
+                            locale,
+                          ).format(date).substring(0, 2),
                         ),
                         calendarBuilders: CalendarBuilders(
                           selectedBuilder: (context, date, focusedDay) {
@@ -358,7 +403,10 @@ class _AddEditItemSheetState extends State<AddEditItemSheet> {
                               ),
                               child: Text(
                                 '${date.day}',
-                                style: TextStyle(color: selectedTextColor, fontWeight: FontWeight.w600),
+                                style: TextStyle(
+                                  color: selectedTextColor,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             );
                           },
@@ -374,6 +422,13 @@ class _AddEditItemSheetState extends State<AddEditItemSheet> {
                       tempSelectedDay, // <-- Kirim state sementara
                       tempSelectedTime, // <-- Kirim state sementara
                       tempRecurrence, // <-- Kirim state sementara
+                      onTimeChanged: (newTime) {
+                        // update nilai sementara di _pickDate
+                        tempSelectedTime = newTime;
+                      },
+                      onRecurrenceChanged: (newRec) {
+                        tempRecurrence = newRec;
+                      },
                     ),
                     const SizedBox(height: 20),
                   ],
@@ -390,17 +445,21 @@ class _AddEditItemSheetState extends State<AddEditItemSheet> {
   // (Fungsi ini sekarang menerima setModalState)
   Widget _buildDateTimeRecurrenceRow(
     BuildContext context,
-    StateSetter setModalState, // <-- Parameter setModalState
+    StateSetter setModalState,
     DateTime selectedDate,
     TimeOfDay selectedTime,
-    String selectedRecurrence,
+    String selectedRecurrence, {
+      required ValueChanged<TimeOfDay> onTimeChanged,
+      required ValueChanged<String> onRecurrenceChanged,
+      }
   ) {
     String formattedDate = DateFormat('dd MMMM yyyy').format(selectedDate);
     String formattedTime = selectedTime.format(context);
 
     // Ambil warna tema
     final Color iconColor = kGreen500;
-    final Color textColor = Theme.of(context).textTheme.bodyLarge?.color ?? Colors.black87;
+    final Color textColor =
+        Theme.of(context).textTheme.bodyLarge?.color ?? Colors.black87;
     final Color dropdownColor = Colors.grey;
     final Color dividerColor = Theme.of(context).dividerColor;
     final Color primaryColor = Theme.of(context).colorScheme.primary;
@@ -420,9 +479,8 @@ class _AddEditItemSheetState extends State<AddEditItemSheet> {
               if (newTime != null) {
                 // --- UPDATE STATE SEMENTARA DENGAN setModalState ---
                 setModalState(() {
-                  selectedTime = newTime; // <-- Tidak error lagi
+                  onTimeChanged(newTime);
                 });
-                // Kita simpan hasil akhir ke _time saat tombol Save ditekan
               }
             },
             child: Row(
@@ -432,7 +490,11 @@ class _AddEditItemSheetState extends State<AddEditItemSheet> {
                 Expanded(
                   child: Text(
                     'Today, $formattedDate - $formattedTime',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: textColor),
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: textColor,
+                    ),
                   ),
                 ),
                 Icon(Icons.keyboard_arrow_down, color: dropdownColor),
@@ -443,15 +505,21 @@ class _AddEditItemSheetState extends State<AddEditItemSheet> {
 
           // Reminder
           GestureDetector(
-             onTap: () { /* ... */ },
+            onTap: () {
+              /* ... */
+            },
             child: Row(
               children: [
                 Icon(Icons.notifications_none, color: iconColor),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    '1 hours before',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: textColor),
+                    '5 minutes before',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: textColor,
+                    ),
                   ),
                 ),
                 Icon(Icons.keyboard_arrow_down, color: dropdownColor),
@@ -463,49 +531,83 @@ class _AddEditItemSheetState extends State<AddEditItemSheet> {
           // Recurrence
           GestureDetector(
             onTap: () async {
-              final String? pickedRecurrence = await showModalBottomSheet<String>(
-                context: context,
-                backgroundColor: modalBgColor,
-                shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-                ),
-                builder: (ctx) => SafeArea(
-                  child: ListView(
-                    shrinkWrap: true,
-                    children: [
-                      const SizedBox(height: 8),
-                      const Center(child: _Grabber()),
-                      ListTile(
-                        title: Text('No Repeat', style: TextStyle(fontWeight: FontWeight.w600, color: textColor)),
-                        trailing: selectedRecurrence == 'No Repeat' ? Icon(Icons.check, color: primaryColor) : null,
-                        onTap: () => Navigator.pop(ctx, 'No Repeat'),
+              final String? pickedRecurrence =
+                  await showModalBottomSheet<String>(
+                    context: context,
+                    backgroundColor: modalBgColor,
+                    shape: const RoundedRectangleBorder(
+                      borderRadius: BorderRadius.vertical(
+                        top: Radius.circular(16),
                       ),
-                       ListTile(
-                        title: Text('Daily', style: TextStyle(fontWeight: FontWeight.w600, color: textColor)),
-                        trailing: selectedRecurrence == 'Daily' ? Icon(Icons.check, color: primaryColor) : null,
-                        onTap: () => Navigator.pop(ctx, 'Daily'),
+                    ),
+                    builder: (ctx) => SafeArea(
+                      child: ListView(
+                        shrinkWrap: true,
+                        children: [
+                          const SizedBox(height: 8),
+                          const Center(child: _Grabber()),
+                          ListTile(
+                            title: Text(
+                              'No Repeat',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: textColor,
+                              ),
+                            ),
+                            trailing: selectedRecurrence == 'No Repeat'
+                                ? Icon(Icons.check, color: primaryColor)
+                                : null,
+                            onTap: () => Navigator.pop(ctx, 'No Repeat'),
+                          ),
+                          ListTile(
+                            title: Text(
+                              'Daily',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: textColor,
+                              ),
+                            ),
+                            trailing: selectedRecurrence == 'Daily'
+                                ? Icon(Icons.check, color: primaryColor)
+                                : null,
+                            onTap: () => Navigator.pop(ctx, 'Daily'),
+                          ),
+                          ListTile(
+                            title: Text(
+                              'Weekly',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: textColor,
+                              ),
+                            ),
+                            trailing: selectedRecurrence == 'Weekly'
+                                ? Icon(Icons.check, color: primaryColor)
+                                : null,
+                            onTap: () => Navigator.pop(ctx, 'Weekly'),
+                          ),
+                          ListTile(
+                            title: Text(
+                              'Every Weekend',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: textColor,
+                              ),
+                            ),
+                            trailing: selectedRecurrence == 'Every Weekend'
+                                ? Icon(Icons.check, color: primaryColor)
+                                : null,
+                            onTap: () => Navigator.pop(ctx, 'Every Weekend'),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
                       ),
-                      ListTile(
-                        title: Text('Weekly', style: TextStyle(fontWeight: FontWeight.w600, color: textColor)),
-                        trailing: selectedRecurrence == 'Weekly' ? Icon(Icons.check, color: primaryColor) : null,
-                        onTap: () => Navigator.pop(ctx, 'Weekly'),
-                      ),
-                      ListTile(
-                        title: Text('Every Weekend', style: TextStyle(fontWeight: FontWeight.w600, color: textColor)),
-                        trailing: selectedRecurrence == 'Every Weekend' ? Icon(Icons.check, color: primaryColor) : null,
-                        onTap: () => Navigator.pop(ctx, 'Every Weekend'),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                  ),
-                ),
-              );
+                    ),
+                  );
               if (pickedRecurrence != null) {
                 // --- UPDATE STATE SEMENTARA DENGAN setModalState ---
                 setModalState(() {
-                  selectedRecurrence = pickedRecurrence; // <-- Tidak error lagi
+                  onRecurrenceChanged(pickedRecurrence); // update tempRecurrence
                 });
-                // Kita simpan hasil akhir ke _recurrence saat tombol Save ditekan
               }
             },
             child: Row(
@@ -515,7 +617,11 @@ class _AddEditItemSheetState extends State<AddEditItemSheet> {
                 Expanded(
                   child: Text(
                     selectedRecurrence,
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500, color: textColor),
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                      color: textColor,
+                    ),
                   ),
                 ),
                 Icon(Icons.keyboard_arrow_down, color: dropdownColor),
@@ -535,9 +641,12 @@ class _AddEditItemSheetState extends State<AddEditItemSheet> {
         : (_isHabit ? 'Edit Habit' : 'Edit Task');
 
     final ColorScheme cs = Theme.of(context).colorScheme;
-    final Color headerTextColor = Theme.of(context).textTheme.titleLarge?.color ?? cs.onSurface;
-    final Color buttonTextColor = Theme.of(context).textTheme.labelLarge?.color ?? cs.onSurface;
-    final Color toolbarBgColor = Theme.of(context).brightness == Brightness.light
+    final Color headerTextColor =
+        Theme.of(context).textTheme.titleLarge?.color ?? cs.onSurface;
+    final Color buttonTextColor =
+        Theme.of(context).textTheme.labelLarge?.color ?? cs.onSurface;
+    final Color toolbarBgColor =
+        Theme.of(context).brightness == Brightness.light
         ? const Color(0xFFF4F6FA)
         : cs.surfaceVariant.withOpacity(0.5);
 
@@ -559,7 +668,10 @@ class _AddEditItemSheetState extends State<AddEditItemSheet> {
                     onTap: () => Navigator.pop(context, AddEditResult.cancel()),
                     child: Text(
                       'Cancel',
-                      style: TextStyle(fontWeight: FontWeight.w600, color: buttonTextColor),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: buttonTextColor,
+                      ),
                     ),
                   ),
                   const Spacer(),
@@ -597,7 +709,8 @@ class _AddEditItemSheetState extends State<AddEditItemSheet> {
                     focusNode: _titleNode,
                     controller: _titleCtrl,
                     textInputAction: TextInputAction.next,
-                    decoration: _underline(context,
+                    decoration: _underline(
+                      context,
                       'New ${_isHabit ? "Habit" : "Task"}',
                     ),
                   ),
@@ -615,7 +728,11 @@ class _AddEditItemSheetState extends State<AddEditItemSheet> {
 
             // Toolbar bawah (ikon)
             Container(
-              margin: const EdgeInsets.only(top: 12, left: 16, right: 16), // Margin ditambah
+              margin: const EdgeInsets.only(
+                top: 12,
+                left: 16,
+                right: 16,
+              ), // Margin ditambah
               padding: const EdgeInsets.symmetric(horizontal: 12),
               height: 52,
               decoration: BoxDecoration(
@@ -650,9 +767,7 @@ class _AddEditItemSheetState extends State<AddEditItemSheet> {
                   TextButton.icon(
                     onPressed: () => setState(() => _isHabit = !_isHabit),
                     icon: Icon(
-                      _isHabit
-                          ? Icons.loop_rounded
-                          : Icons.task_alt_rounded,
+                      _isHabit ? Icons.loop_rounded : Icons.task_alt_rounded,
                       size: 18,
                     ),
                     label: Text(_isHabit ? 'Habit' : 'Task'),
@@ -714,9 +829,7 @@ class _AddEditItemSheetState extends State<AddEditItemSheet> {
     return InputDecoration(
       hintText: hint,
       hintStyle: TextStyle(color: hintColor),
-      border: UnderlineInputBorder(
-        borderSide: BorderSide(color: borderColor),
-      ),
+      border: UnderlineInputBorder(borderSide: BorderSide(color: borderColor)),
       enabledBorder: UnderlineInputBorder(
         borderSide: BorderSide(color: borderColor),
       ),
@@ -736,13 +849,11 @@ class _FieldLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color labelColor = Theme.of(context).textTheme.labelSmall?.color ?? Colors.black54;
+    final Color labelColor =
+        Theme.of(context).textTheme.labelSmall?.color ?? Colors.black54;
     return Padding(
       padding: const EdgeInsets.only(bottom: 6),
-      child: Text(
-        text,
-        style: TextStyle(fontSize: 12, color: labelColor),
-      ),
+      child: Text(text, style: TextStyle(fontSize: 12, color: labelColor)),
     );
   }
 }
@@ -789,7 +900,9 @@ class _Grabber extends StatelessWidget {
   const _Grabber();
   @override
   Widget build(BuildContext context) {
-    final Color grabberColor = Theme.of(context).colorScheme.outlineVariant.withOpacity(0.4);
+    final Color grabberColor = Theme.of(
+      context,
+    ).colorScheme.outlineVariant.withOpacity(0.4);
     return Container(
       width: 36,
       height: 4,
