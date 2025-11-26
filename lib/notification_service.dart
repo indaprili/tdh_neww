@@ -1,3 +1,5 @@
+// ignore_for_file: unnecessary_null_comparison
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tz_data;
@@ -63,7 +65,7 @@ class NotificationService {
     if (item.done) return;
 
     final DateTime now = DateTime.now();
-    final DateTime due = item.dueDate!;
+    final DateTime due = item.dueDate;
 
     // Mundur 5 menit sebelum deadline
     DateTime scheduledTime = due.subtract(const Duration(minutes: 5));

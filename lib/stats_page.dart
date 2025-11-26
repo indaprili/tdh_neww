@@ -1,3 +1,5 @@
+// ignore_for_file: unused_element_parameter, unnecessary_null_comparison, unused_local_variable, deprecated_member_use, prefer_final_fields
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -75,7 +77,7 @@ class _StatsPageState extends State<StatsPage> {
   }
   Future<void> _scheduleReminder(_Item item) async {
     if (item.dueDate != null) {
-      final reminderTime = item.dueDate!.subtract(Duration(minutes: 15));
+      final reminderTime = item.dueDate.subtract(Duration(minutes: 15));
       await NotificationService().scheduleReminder(item);
     }
   }

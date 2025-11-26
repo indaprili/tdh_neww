@@ -1,4 +1,6 @@
 // profile_page.dart
+// ignore_for_file: deprecated_member_use, prefer_final_fields, use_build_context_synchronously
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart'; // <-- Import Google Fonts
 import 'calender_page.dart';
